@@ -154,7 +154,7 @@ Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in 
 
 - `HostCall`, `HostReply` and spec structs are postcard encoded. Never add a field to an existing struct: ABI 2 guests would stop decoding. New data needs a new variant or a new struct.
 
-- `T/modtest.sh` drives one shared test server and client (`b1.7.3-rewrite/run/modtest-*`). Never stop, reset or take
+- `T/modtest.sh` drives one shared test server and client (`b1.7.3-rewrite/target/modtest`, server in its `server/`). Never stop, reset or take
   over one another session started without asking the user.
 - `cargo b173 build` already runs the wasm build; there is no separate `cargo build` step.
 - Loader or SDK change without `deploy --game`: the server still runs the old binary without the new host calls.

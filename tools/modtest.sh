@@ -11,9 +11,12 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
-serverDir="$game/run/modtest-server"
-clientDir="$game/run/modtest-client"
+# the test game keeps its own data folder in the build output so tests never touch the player's worlds
+export B173_HOME="$game/target/modtest"
+clientDir="$B173_HOME"
+serverDir="$B173_HOME/server"
 port="${MODTEST_PORT:-25566}"
+assets="${B173_ASSETS:-${B173_CLIENT_ASSETS:-$(launcherData)/assets}}"
 
 mkdir -p "$serverDir/mods" "$clientDir/mods"
 
@@ -43,7 +46,7 @@ case "${1:-}" in
         cd "$serverDir"
         # the tail pid is kept so stop works without pkill, which git bash lacks
         (tail -f cmd.txt & echo $! > tail.pid; wait) \
-            | B173_ASSETS="$game/assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
+            | B173_ASSETS="$assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
         echo $! > server.pid
         for _ in $(seq 60); do
             grep -q "Done (" console.txt 2>/dev/null && break
@@ -54,8 +57,7 @@ case "${1:-}" in
     client)
         name="${2:-Tester}"
         cd "$clientDir"
-        B173_DEVSHOT=1 B173_ASSETS="${B173_CLIENT_ASSETS:-$(launcherData)/assets}" B173_MINECRAFT_DIR="$clientDir" \
-            nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
+        B173_DEVSHOT=1 B173_ASSETS="$assets" nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
         echo $! > client.pid
         for _ in $(seq 60); do
             grep -q "logged in" "$serverDir/console.txt" 2>/dev/null && break
@@ -71,7 +73,7 @@ case "${1:-}" in
         tail -n +"$((before + 1))" "$serverDir/console.txt" | grep -v "^\s*$" | awk '!seen[$0]++' | sed 's/^[0-9-]* [0-9:]* //'
         ;;
     shot)
-        target="${2:-$game/run/shots/shot.png}"
+        target="${2:-$B173_HOME/shots/shot.png}"
         rm -f "$clientDir/devshot.done"
         touch "$clientDir/devshot.request"
         for _ in $(seq 50); do
