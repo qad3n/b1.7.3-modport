@@ -21,6 +21,21 @@ tool fails on a missing dependency, run `T/doctor.sh`: it prints the command tha
 bash: on Windows they run in Git Bash (the Bash tool of Claude Code on Windows) and handle `.exe`, `py` and paths
 themselves. Call Python tools through `T/py.sh`, never `python3` directly.
 
+## Modes
+
+Check once per session: `test -f .modport-maintainer` in the workspace root.
+
+- **Maintainer mode** (the marker exists): the loader, SDK and kit repos are this user's own. Commit and push to them
+  only when the user asks, as the steps below say.
+- **User mode** (no marker, the default): the loader, SDK and kit repos belong to their upstream author.
+  - Loader and SDK extensions stay in the local working tree. Never commit them to those repos, never push to their
+    remotes, never run `gh pr create`, `gh issue create` or any other `gh` write against them, even when asked to
+    "share" or "upstream" a change. Tell the user to do that themselves.
+  - Log each loader or SDK change in `ports/<modid>/LOADER_CHANGES.md`: what it adds, why, which files.
+  - Tell the user that a port needing a local loader change runs only on their patched loader, not on a stock one.
+  - The port folder is the user's own repo: commit there when asked, push only to a remote the user set up.
+  - Never create the marker file.
+
 ## Tools
 
 | Tool | Use it when | Output |
@@ -57,6 +72,7 @@ in `ports/<modid>/tools/` instead of retyping them.
    one issue; fix the list at the end.
 6. **Finish.** Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3-rewrite`.
    Commit only when asked: a port repo holds Rust source, tools and manifests, never assets, `reference/` or AI files.
+   In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
 
 ## Exemplars
 
@@ -105,8 +121,8 @@ General features only, never a one-mod hack. Paths below are inside `b1.7.3-rewr
    `// rewrite:` comment, listed with a version in `crates/modloader/hooks.toml`.
 5. Dev console tools in `crates/modloader/src/devtools.rs` (add to `USAGE`).
 6. `cargo build` and `cargo clippy`, then `T/test.sh deploy ports/<modid> --game`. Note the addition where the
-   workspace keeps loader notes. SDK changes are committed in the SDK submodule, then bumped in the rewrite, only when
-   the user asks.
+   workspace keeps loader notes. Maintainer mode: SDK changes are committed in the SDK submodule, then bumped in the
+   rewrite, only when the user asks. User mode: nothing is committed there, the change goes in `LOADER_CHANGES.md`.
 
 Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in `host/world.rs` to the wrapper in
 `b173_api/src/world.rs`.
