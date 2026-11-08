@@ -10,24 +10,19 @@
 #   api.sh hooks                hook catalog names
 set -euo pipefail
 
-# workspace above this repo unless B173_ROOT is set
-root="${B173_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
-game="$root/b1.7.3-rewrite"
-sdk="$game/vendor/b1.7.3-modding-sdk"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 api="$sdk/b173_api/src"
 protocol="$sdk/mod_protocol/src"
 loader="$game/crates/modloader"
 
 sdkIndex()
 {
-    local files=()
     cd "$api"
     if [[ -n "${1:-}" ]]; then
-        mapfile -t files < <(find . -name "$1.rs" -o -path "./$1/*.rs")
+        find . -name "$1.rs" -o -path "./$1/*.rs"
     else
-        mapfile -t files < <(find . -name '*.rs' ! -name vanilla.rs ! -name dispatch.rs ! -name rt.rs | sort)
-    fi
-    grep -HnE '^\s*(pub )?(fn|struct|enum|trait|type) |^\s*pub const [A-Z_]+: [A-Za-z]+ =|^impl|^pub use' "${files[@]}" \
+        find . -name '*.rs' ! -name vanilla.rs ! -name dispatch.rs ! -name rt.rs | sort
+    fi | tr '\n' '\0' | xargs -0 grep -HnE '^[[:space:]]*(pub )?(fn|struct|enum|trait|type) |^[[:space:]]*pub const [A-Z_]+: [A-Za-z]+ =|^impl|^pub use' \
         | sed -E 's|^\./||; s/[[:space:]]+/ /g; s/ ?\{.*$//; s/:([0-9]+): ?/:\1 /; s/ where .*$//' \
         | grep -vE '^[a-z_/]+\.rs:[0-9]+ fn [a-z]' \
         | grep -vE ' fn overridden\(' || true
@@ -36,7 +31,7 @@ sdkIndex()
 enumVariants()
 {
     awk -v name="$1" '$0 ~ "pub enum " name "( |$)" { on = 1; next } on && /^}/ { exit } on' "$protocol/abi.rs" "$protocol/spec.rs" \
-        | grep -vE '^\s*//' | grep -oE '^    [A-Z][A-Za-z0-9]*( \{[^}]*\}?|\([^)]*\))?' | sed 's/^    //' | tr '\n' ' '
+        | grep -vE '^[[:space:]]*//' | grep -oE '^    [A-Z][A-Za-z0-9]*( \{[^}]*\}?|\([^)]*\))?' | sed 's/^    //' | tr '\n' ' '
     echo
 }
 

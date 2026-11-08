@@ -4,15 +4,14 @@
 set -euo pipefail
 
 modid="${1:?modid}"
-jar="$(realpath "${2:?mod jar}")"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+jar="$(absPath "${2:?mod jar}")"
 name="${3:-$modid}"
-# workspace above this repo unless B173_ROOT is set
-root="${B173_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
-port="$root/ports/$modid"
-vineflower="${VINEFLOWER:-$root/b1.7.3_decomp/tools/bin/vineflower-1.12.0.jar}"
+port="$ports/$modid"
+vineflower="$(vineflowerJar)"
 java="${JAVA:-java}"
 
-[[ -e "$port" ]] && { echo "$port exists" >&2; exit 1; }
+[[ -e "$port" ]] && fail "$port exists"
 mkdir -p "$port/src" "$port/tools" "$port/reference/src"
 cd "$port"
 
@@ -122,6 +121,6 @@ for out in reference/src/*.jar; do
 done
 
 echo "== inventory"
-"$root/tools/modport/inventory.sh" reference/src > reference/inventory.txt
+"$kitTools/inventory.sh" reference/src > reference/inventory.txt
 grep "^==" reference/inventory.txt
 echo "full list: $port/reference/inventory.txt"

@@ -1,58 +1,32 @@
-# Beta 1.7.3 Mod Port Kit
+# b1.7.3-modport
 
-A Claude Code skill and helper tools for porting Minecraft Java mods of any version to the b1.7.3-rewrite mod loader.
-A port is a Rust rewrite compiled to one `.b173mod` that runs on both client and server. The decompiled original mod
-is its spec.
+A Claude Code skill and a few scripts for porting Minecraft Java mods to the
+[b1.7.3-rewrite](https://github.com/qad3n/b1.7.3-rust-rewrite) mod loader. A port is a Rust rewrite of the mod that
+builds to one `.b173mod` file for both client and server.
 
-The kit moves the slow parts of a port into scripts: scaffolding, decompiling, listing content, looking up the SDK,
-extracting assets, converting models and the build, install and test cycle. That leaves the agent free for the
-porting itself.
+## Setup
 
-## Layout
-
-```
-skills/modport/SKILL.md   the /modport skill: workflow, tool table, exemplar map, loader extension checklist
-tools/new_port.sh         scaffold ports/<modid>, decompile the jar with Vineflower, write the content inventory
-tools/inventory.sh        list what a decompiled mod registers (blocks, items, entities, tiles, models, GUIs, worldgen)
-tools/api.sh              one line per signature index of the b173_api SDK, protocol enums, templates and console
-tools/extract_assets.py   copy textures, sounds and lang from the user's own jar, with port lang keys
-tools/convert_models.py   turn ModelBase classes (SRG or MCP names) into Rust EntityModelSpec builders
-tools/test.sh             deploy a port to the shared test server, then scan the logs for errors
-install.sh                link the skill and tools into a workspace
-```
-
-## Workspace
-
-The tools expect this repo next to the other projects in one workspace folder:
-
-```
-<workspace>/
-  b1.7.3-modport/          this repo
-  b1.7.3-rewrite/          the game, mod loader and vendored modding SDK
-  b1.7.3_decomp/tools/bin/ vineflower-1.12.0.jar
-  tools/rewrite/modtest.sh test server and client driver
-  ports/<modid>/           one git repo per port
-```
-
-`B173_ROOT` points the tools at another workspace and `VINEFLOWER` at another Vineflower jar.
-
-## Install
+Put this repo and the rewrite side by side in one folder:
 
 ```bash
-./install.sh
+git clone --recurse-submodules https://github.com/qad3n/b1.7.3-rust-rewrite.git b1.7.3-rewrite
+git clone https://github.com/qad3n/b1.7.3-modport.git
+./b1.7.3-modport/install.sh
 ```
 
-This links `skills/modport` to `<workspace>/.claude/skills/modport` and `tools` to `<workspace>/tools/modport`. Pass
-a workspace path to install somewhere else. Then run `/modport` (or ask Claude Code to port a mod) in that workspace.
+`install.sh` links the skill and tools into the folder and checks what is missing. Each missing item comes with the
+command that fixes it.
 
-Requirements: bash, Python 3, a JDK for Vineflower, Rust with the `wasm32-unknown-unknown` target, and `cargo-b173`
-built from the modding SDK.
+## Use
 
-## Assets
+Open Claude Code in that folder and run `/modport` with a mod jar. The scripts in `tools/` also work by hand:
 
-The kit never ships mod or Minecraft assets. `extract_assets.py` reads them from a jar the user owns into the port's
-gitignored `assets/` folder.
+- `new_port.sh <modid> <jar>` starts a port in `ports/<modid>`
+- `test.sh deploy ports/<modid>` builds it and runs it on a test server
+- `doctor.sh` checks the setup again
+
+No game or mod assets are included. They come from jars you own.
 
 ## License
 
-See [LICENSE](LICENSE).
+Non-commercial, see [LICENSE](LICENSE).
