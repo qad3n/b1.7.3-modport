@@ -12,6 +12,9 @@ vineflower="$(vineflowerJar)"
 java="${JAVA:-java}"
 
 [[ -e "$port" ]] && fail "$port exists"
+# ports inside a git work tree means a monorepo that already ignores build output
+monorepo=false
+[[ -d "$ports" ]] && git -C "$ports" rev-parse --is-inside-work-tree > /dev/null 2>&1 && monorepo=true
 mkdir -p "$port/src" "$port/tools" "$port/reference/src"
 cd "$port"
 
@@ -72,7 +75,7 @@ fn register(_ctx: &mut RegisterCtx) -> Result<()>
 }
 EOF
 
-printf 'target/\nassets/\nreference/\nCargo.lock\n' > .gitignore
+$monorepo || printf 'target/\nassets/\nreference/\nCargo.lock\n' > .gitignore
 cat > rustfmt.toml <<'EOF'
 edition = "2024"
 unstable_features = true
@@ -109,7 +112,7 @@ Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $mo
 ## Todo, in order
 EOF
 
-git init -q
+$monorepo || git init -q
 
 echo "== decompiling"
 "$java" -jar "$vineflower" --indent-string="    " --log-level=warn "$jar" reference/src > reference/vineflower.log 2>&1 \

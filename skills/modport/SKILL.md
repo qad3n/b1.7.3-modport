@@ -71,7 +71,8 @@ in `ports/<modid>/tools/` instead of retyping them.
 5. **Test** after each module with `deploy`, `cmd`, `errors`. Keep a bug list in PORT_STATUS.md instead of looping on
    one issue; fix the list at the end.
 6. **Finish.** Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3-rewrite`.
-   Commit only when asked: a port repo holds Rust source, tools and manifests, never assets, `reference/` or AI files.
+   Commit only when asked: a port holds Rust source, tools and manifests, never assets, `reference/` or AI files.
+   `ports/` is either one git repo per port or a monorepo with one folder per mod; `new_port.sh` detects which.
    In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
 
 ## Exemplars
