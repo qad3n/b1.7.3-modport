@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# drives a b1.7.3-rewrite server and client for mod testing with client assets from B173_CLIENT_ASSETS or the launcher
+# drives a b1.7.3_rewrite server and client for mod testing with client assets from B173_CLIENT_ASSETS or the launcher
 #   modtest.sh install <file.b173mod>...   copy mods into the test server and client mods folders
 #   modtest.sh server                      start the test server, console commands come from cmd.txt
 #   modtest.sh client [name]               start a client that joins the test server

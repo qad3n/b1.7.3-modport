@@ -1,7 +1,7 @@
 # b1.7.3-modport
 
 A Claude Code skill and a few scripts for porting Minecraft Java mods to the
-[b1.7.3-rewrite](https://github.com/qad3n/b1.7.3-rust-rewrite) mod loader. A port is a Rust rewrite of the mod that
+[b1.7.3_rewrite](https://github.com/qad3n/b1.7.3-rust-rewrite) mod loader. A port is a Rust rewrite of the mod that
 builds to one `.b173mod` file for both client and server.
 
 ## Setup
@@ -9,9 +9,9 @@ builds to one `.b173mod` file for both client and server.
 Put this repo and the rewrite side by side in one folder:
 
 ```bash
-git clone --recurse-submodules https://github.com/qad3n/b1.7.3-rust-rewrite.git b1.7.3-rewrite
-git clone https://github.com/qad3n/b1.7.3-modport.git
-./b1.7.3-modport/install.sh
+git clone --recurse-submodules https://github.com/qad3n/b1.7.3-rust-rewrite.git b1.7.3_rewrite
+git clone https://github.com/qad3n/b1.7.3-modport.git b1.7.3_modport
+./b1.7.3_modport/install.sh
 ```
 
 `install.sh` links the skill and tools into the folder and checks what is missing. Each missing item comes with the

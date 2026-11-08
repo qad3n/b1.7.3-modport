@@ -4,7 +4,7 @@
 kitTools="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # workspace above this repo unless B173_ROOT is set
 root="${B173_ROOT:-$(cd "$kitTools/../.." && pwd)}"
-game="$root/b1.7.3-rewrite"
+game="$root/b1.7.3_rewrite"
 sdk="$game/vendor/b1.7.3-modding-sdk"
 ports="$root/ports"
 

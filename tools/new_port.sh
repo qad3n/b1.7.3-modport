@@ -29,7 +29,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-b173_api = { path = "../../b1.7.3-rewrite/vendor/b1.7.3-modding-sdk/b173_api" }
+b173_api = { path = "../../b1.7.3_rewrite/vendor/b1.7.3-modding-sdk/b173_api" }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 
 [lints.rust]
@@ -100,7 +100,7 @@ cat > PORT_STATUS.md <<EOF
 # $name port status
 
 Source: $(basename "$jar") (\`reference/src\`, Vineflower decompile, never committed).
-Target: b1.7.3-rewrite mod loader, one \`$modid-<version>.b173mod\` for client and server.
+Target: b1.7.3_rewrite mod loader, one \`$modid-<version>.b173mod\` for client and server.
 Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $modid\` fills \`assets/$modid\`.
 
 ## Inventory

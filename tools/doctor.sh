@@ -23,7 +23,7 @@ javaMajor()
 }
 
 echo "workspace $root"
-check "b1.7.3-rewrite" "[[ -f '$game/Cargo.toml' ]]" "git clone --recurse-submodules https://github.com/qad3n/b1.7.3-rust-rewrite.git '$game'"
+check "b1.7.3_rewrite" "[[ -f '$game/Cargo.toml' ]]" "git clone --recurse-submodules https://github.com/qad3n/b1.7.3-rust-rewrite.git '$game'"
 check "modding SDK submodule" "[[ -f '$sdk/b173_api/Cargo.toml' ]]" "git -C '$game' submodule update --init --recursive"
 check "cargo" "command -v cargo" "install Rust from https://rustup.rs"
 check "wasm32 target" "rustup target list --installed | grep -q wasm32-unknown-unknown" "rustup target add wasm32-unknown-unknown"

@@ -1,9 +1,9 @@
 ---
 name: modport
-description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3-rewrite mod loader as one .b173mod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3.
+description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3_rewrite mod loader as one .b173mod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3.
 ---
 
-# Port a mod to the b1.7.3-rewrite loader
+# Port a mod to the b1.7.3_rewrite loader
 
 Java mods cannot run. A port is a Rust rewrite (wasm guest, `b173_api` SDK) that uses the decompiled mod as its spec.
 Goal: same look, feel and gameplay inside b1.7.3, from one file in both client and server `mods/`. Fix source bugs and
@@ -14,9 +14,9 @@ tools, then open only the one exemplar file the step needs.
 
 ## Workspace
 
-Paths are relative to the workspace root, the folder that holds `b1.7.3-rewrite/`, `ports/` and the kit repo
-`b1.7.3-modport/`. The kit's `install.sh` links its tools to `tools/modport/` (written `T/` below) and this skill to
-`.claude/skills/modport`; from a port folder `T/` is `../../tools/modport/`. Fix or extend tools in `b1.7.3-modport/`, never inside a port. On a new machine, or when a
+Paths are relative to the workspace root, the folder that holds `b1.7.3_rewrite/`, `ports/` and the kit repo
+`b1.7.3_modport/`. The kit's `install.sh` links its tools to `tools/modport/` (written `T/` below) and this skill to
+`.claude/skills/modport`; from a port folder `T/` is `../../tools/modport/`. Fix or extend tools in `b1.7.3_modport/`, never inside a port. On a new machine, or when a
 tool fails on a missing dependency, run `T/doctor.sh`: it prints the command that fixes each gap. All tools are
 bash: on Windows they run in Git Bash (the Bash tool of Claude Code on Windows) and handle `.exe`, `py` and paths
 themselves. Call Python tools through `T/py.sh`, never `python3` directly.
@@ -70,14 +70,14 @@ in `ports/<modid>/tools/` instead of retyping them.
 4. **Extend the loader** only when `api.sh` shows no way (checklist below).
 5. **Test** after each module with `deploy`, `cmd`, `errors`. Keep a bug list in PORT_STATUS.md instead of looping on
    one issue; fix the list at the end.
-6. **Finish.** Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3-rewrite`.
+6. **Finish.** Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3_rewrite`.
    Commit only when asked: a port holds Rust source, tools and manifests, never assets, `reference/` or AI files.
    `ports/` is either one git repo per port or a monorepo with one folder per mod; `new_port.sh` detects which.
    In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
 
 ## Exemplars
 
-SDK examples, always present: `b1.7.3-rewrite/vendor/b1.7.3-modding-sdk/examples/` with `testmod` (every API module in
+SDK examples, always present: `b1.7.3_rewrite/vendor/b1.7.3-modding-sdk/examples/` with `testmod` (every API module in
 one file), `ruby` (data only content), `energy`, `energy_api`, `machines` (services between mods).
 
 A finished port, when the workspace has one, is the faster map. The Aether port (`ports/aether/src`):
@@ -129,7 +129,7 @@ Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeri
 
 ## Extending the loader
 
-General features only, never a one-mod hack. Paths below are inside `b1.7.3-rewrite/`. Touch points, in order:
+General features only, never a one-mod hack. Paths below are inside `b1.7.3_rewrite/`. Touch points, in order:
 
 1. Protocol: append variants at the end of `HostCall`, `GuestCall`, `GuestReply` or `EntityField` in
    `vendor/b1.7.3-modding-sdk/mod_protocol/src/abi.rs`; new spec fields in `spec.rs` as `Option` or `Default` types
@@ -154,7 +154,7 @@ Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in 
 
 - `HostCall`, `HostReply` and spec structs are postcard encoded. Never add a field to an existing struct: ABI 2 guests would stop decoding. New data needs a new variant or a new struct.
 
-- `T/modtest.sh` drives one shared test server and client (`b1.7.3-rewrite/target/modtest`, server in its `server/`). Never stop, reset or take
+- `T/modtest.sh` drives one shared test server and client (`b1.7.3_rewrite/target/modtest`, server in its `server/`). Never stop, reset or take
   over one another session started without asking the user.
 - `cargo b173 build` already runs the wasm build; there is no separate `cargo build` step.
 - Loader or SDK change without `deploy --game`: the server still runs the old binary without the new host calls.
