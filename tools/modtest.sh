@@ -41,7 +41,9 @@ case "${1:-}" in
         fi
         : > "$serverDir/cmd.txt"
         cd "$serverDir"
-        tail -f cmd.txt | B173_ASSETS="$game/assets" nohup "$game/target/release/beta173_server" > console.txt 2>&1 &
+        # the tail pid is kept so stop works without pkill, which git bash lacks
+        (tail -f cmd.txt & echo $! > tail.pid; wait) \
+            | B173_ASSETS="$game/assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
         echo $! > server.pid
         for _ in $(seq 60); do
             grep -q "Done (" console.txt 2>/dev/null && break
@@ -52,8 +54,8 @@ case "${1:-}" in
     client)
         name="${2:-Tester}"
         cd "$clientDir"
-        B173_DEVSHOT=1 B173_ASSETS="${B173_CLIENT_ASSETS:-$HOME/.local/share/beta173/assets}" B173_MINECRAFT_DIR="$clientDir" \
-            nohup "$game/target/release/beta173" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
+        B173_DEVSHOT=1 B173_ASSETS="${B173_CLIENT_ASSETS:-$(launcherData)/assets}" B173_MINECRAFT_DIR="$clientDir" \
+            nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
         echo $! > client.pid
         for _ in $(seq 60); do
             grep -q "logged in" "$serverDir/console.txt" 2>/dev/null && break
@@ -92,7 +94,7 @@ case "${1:-}" in
             sleep 3
         fi
         stopPid "$serverDir/server.pid"
-        pkill -f "tail -f cmd.txt" 2>/dev/null || true
+        stopPid "$serverDir/tail.pid"
         ;;
     reset)
         "$0" stop

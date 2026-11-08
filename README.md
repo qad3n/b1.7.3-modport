@@ -17,6 +17,8 @@ git clone https://github.com/qad3n/b1.7.3-modport.git
 `install.sh` links the skill and tools into the folder and checks what is missing. Each missing item comes with the
 command that fixes it.
 
+On Windows, run the commands in Git Bash, which comes with Git for Windows and is what Claude Code uses there.
+
 ## Use
 
 Open Claude Code in that folder and run `/modport` with a mod jar. The scripts in `tools/` also work by hand:

@@ -98,7 +98,7 @@ cat > PORT_STATUS.md <<EOF
 
 Source: $(basename "$jar") (\`reference/src\`, Vineflower decompile, never committed).
 Target: b1.7.3-rewrite mod loader, one \`$modid-<version>.b173mod\` for client and server.
-Assets: never committed, \`python3 -I tools/extract_assets.py <jar>\` fills \`assets/$modid\`.
+Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $modid\` fills \`assets/$modid\`.
 
 ## Inventory
 
@@ -117,7 +117,7 @@ echo "== decompiling"
 # vineflower writes a jar when given a jar, unpack it so grep and the converters see sources
 for out in reference/src/*.jar; do
     [[ -f "$out" ]] || continue
-    (cd reference/src && unzip -qo "$(basename "$out")" && rm "$(basename "$out")")
+    unzipTo "$out" reference/src && rm "$out"
 done
 
 echo "== inventory"

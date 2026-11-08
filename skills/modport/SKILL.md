@@ -17,7 +17,9 @@ tools, then open only the one exemplar file the step needs.
 Paths are relative to the workspace root, the folder that holds `b1.7.3-rewrite/`, `ports/` and the kit repo
 `b1.7.3-modport/`. The kit's `install.sh` links its tools to `tools/modport/` (written `T/` below) and this skill to
 `.claude/skills/modport`; from a port folder `T/` is `../../tools/modport/`. Fix or extend tools in `b1.7.3-modport/`, never inside a port. On a new machine, or when a
-tool fails on a missing dependency, run `T/doctor.sh`: it prints the command that fixes each gap.
+tool fails on a missing dependency, run `T/doctor.sh`: it prints the command that fixes each gap. All tools are
+bash: on Windows they run in Git Bash (the Bash tool of Claude Code on Windows) and handle `.exe`, `py` and paths
+themselves. Call Python tools through `T/py.sh`, never `python3` directly.
 
 ## Tools
 
@@ -26,8 +28,8 @@ tool fails on a missing dependency, run `T/doctor.sh`: it prints the command tha
 | `T/new_port.sh <modid> <jar> [name]` | Starting a port. Writes manifests, git init, decompiles into `reference/src` (Vineflower, downloaded and verified on first use), runs the inventory | `ports/<modid>/` |
 | `T/inventory.sh <src>` | Listing what a mod registers: blocks, items and entities with classes, tiles, models, renderers, GUIs, worldgen, events | ~15 KB for a large mod, kept in `reference/inventory.txt` |
 | `T/api.sh` | Before writing code against the SDK. `sdk <file>` (world, register, screen, behavior, events, terrain, config, services), `spec <Struct>`, `enum <Name>` (HostCall, EntityField, ModelOp), `templates`, `events`, `console`, `hooks` | one line per signature with SDK line numbers |
-| `python3 -I T/extract_assets.py <jar> <modid>` | Once, from the port folder. Textures, sounds and lang into `assets/<modid>`, lang keys mapped to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>` | never committed |
-| `python3 -I T/convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
+| `T/py.sh extract_assets.py <jar> <modid>` | Once, from the port folder. Textures, sounds and lang into `assets/<modid>`, lang keys mapped to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>` | never committed |
+| `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
 | `T/test.sh deploy ports/<modid> [--game]` | Every test cycle. Builds, stops the test server, installs the mod alone, starts the server. `--game` first rebuilds the game and cargo-b173 (after loader or SDK changes). Refuses while a test server runs: another session may own it, ask before `--force` | server console tail |
 | `T/test.sh errors [n]` | First thing after any failure | panic, trap and error lines of both logs |
 | `T/modtest.sh cmd <console line>` / `log server 80` | Driving and checking the server | reply lines only |

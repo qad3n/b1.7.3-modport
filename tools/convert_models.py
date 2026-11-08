@@ -295,12 +295,18 @@ def split(args):
     return out
 
 
+def indent(source, match):
+    # member indent since vineflower defaults to three spaces and the kit uses four
+    lineStart = source.rfind("\n", 0, match.start()) + 1
+    return source[lineStart:match.start()]
+
+
 def constructor(source, cls):
     # the constructor doing the work, a this(...) delegate is skipped for the overload it calls
     matches = list(re.finditer(r"public " + cls + r"\(([^)]*)\)\s*\{", source))
     if not matches:
         raise ValueError(f"no constructor in {cls}")
-    match = max(matches, key=lambda found: source.count(";", found.end(), source.find("\n   }", found.end())))
+    match = max(matches, key=lambda found: source.count(";", found.end(), source.find("\n" + indent(source, found) + "}", found.end())))
     start = match.end()
     depth, index = 1, start
     while depth:
@@ -391,7 +397,7 @@ def main():
         superCall = next((statement for statement in statements if statement.startswith("super(")), None)
         if extends and extends.group(1) == "ModelQuadruped" and superCall:
             converter.base("quadruped", split(superCall[len("super("):superCall.rindex(")")]))
-        for initializer in re.findall(r"^   (?:public |private |protected )?ModelRenderer (\w+ = new ModelRenderer\([^;]*\));", source, re.M):
+        for initializer in re.findall(r"^[ \t]+(?:public |private |protected )?ModelRenderer (\w+ = new ModelRenderer\([^;]*\));", source, re.M):
             converter.statement(initializer)
         converter.run([statement for statement in statements if not statement.startswith("super(")])
         emit(converter, out)

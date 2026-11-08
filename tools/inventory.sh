@@ -21,7 +21,7 @@ named()
     local hits
     hits=$(grep -rhoE "$pattern" --include='*.java' "$src" | sed -E "$toRow" | grep -E "$keep" | sort -u || true)
     [[ -z "$hits" ]] && return
-    printf '== %s (%s)\n%s\n' "$title" "$(wc -l <<< "$hits")" "$(column -c 120 <<< "$hits" | expand -t 8 | tr -s " ")"
+    printf '== %s (%s)\n%s\n' "$title" "$(wc -l <<< "$hits")" "$hits"
 }
 
 # "name Class" rows from register helpers, as register("zanite", new ItemZanite()) or BLOCKS.register("x", () -> new Block
