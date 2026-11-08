@@ -105,6 +105,28 @@ lighting) in the entity's `pose`; `onLivingUpdate`/`updateEntityActionState` go 
 (single player loops packets back, same code both sides); validate every serverbound payload; chat through
 `translate("<modid>.gui.…")`; sounds as `<modid>.<path.with.dots>`; textures as `<modid>:<path>`.
 
+Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeric id:
+- **Block variants and facing.** Source metadata or block states become named states: `ctx.blocks().states(name, BlockStatesSpec)` or `data/<modid>/states/<block>.toml`.
+  - List each property's values in the source's metadata order, so `ctx.meta()` code keeps working.
+  - A block with more than 16 states gets extra hidden ids from the loader. Read and write such a block only through `world.blockState`/`setBlockState` or `ctx.state()`/`setState()`.
+  - Textures per state go in `variants`.
+- **Per-stack data.** Item NBT and capabilities become data components: `stackComponent`/`setStackComponent` with a `StackRef`.
+  - A mod writes only `<modid>:*` components.
+  - Stacks with different components never merge.
+  - Damage stays durability. Use one item per variant instead of damage subtypes.
+- **Data on things the mod does not own.** Entity, player, tile, chunk and world NBT or capabilities become per-mod slots:
+  - entity: `entity.setData` or `setSynced`
+  - player: `player.setData(key, ..)`
+  - tile entity: `world.setTileAttachment`
+  - chunk: `world.setChunkAttachment`
+  - world: `setWorldData`
+
+  Every slot is keyed by the mod id, so two mods never clash.
+- **Edits to vanilla or other mods' content.** Property edits (hardness, light, flammability, tool) become `ctx.blocks().modify(BlockModifySpec)` or `data/<modid>/modify/blocks/*.toml`. Spawn list edits become `modifySpawns` or `modify/spawns/*.toml`. Mining speed for a tool class comes from the `minecraft:mineable/<pickaxe|axe|shovel>` tags. Conflicting edits are reported in the Mod Loader screen. Never replace a whole vanilla block for a property change.
+- **Worldgen and commands.**
+  - Name each worldgen feature uniquely. The name seeds its random, so other mods never shift it.
+  - Commands answer to `/<modid>:<name>`. The short `/<name>` goes to the first mod that registers it.
+
 ## Extending the loader
 
 General features only, never a one-mod hack. Paths below are inside `b1.7.3-rewrite/`. Touch points, in order:
@@ -129,6 +151,8 @@ Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in 
 `b173_api/src/world.rs`.
 
 ## Known traps
+
+- `HostCall`, `HostReply` and spec structs are postcard encoded. Never add a field to an existing struct: ABI 2 guests would stop decoding. New data needs a new variant or a new struct.
 
 - `T/modtest.sh` drives one shared test server and client (`b1.7.3-rewrite/run/modtest-*`). Never stop, reset or take
   over one another session started without asking the user.
