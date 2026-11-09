@@ -102,7 +102,8 @@ A finished port, when the workspace has one, is the faster map. The Aether port 
 Shapes that always apply: renderer GL calls become `Program` ops (push, translate, rotate, scale, texture, blend,
 lighting) in the entity's `pose`; `onLivingUpdate`/`updateEntityActionState` go to `onAi` (replaces template AI) or
 `onTick`; `terrain::Random` and the noise ports keep seeds identical; check `isAuthority()` before changing the world
-(single player loops packets back, same code both sides); validate every serverbound payload; chat through
+(single player loops packets back, same code both sides); client side motion on mobs and other players does nothing in
+multiplayer since the server drives their positions, so port such code to the server; validate every serverbound payload; chat through
 `translate("<modid>.gui.…")`; sounds as `<modid>.<path.with.dots>`; textures as `<modid>:<path>`.
 
 Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeric id:
