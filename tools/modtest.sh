@@ -39,14 +39,14 @@ case "${1:-}" in
         ;;
     server)
         if [[ ! -f "$serverDir/server.properties" ]]; then
-            printf 'level-name=world\nonline-mode=false\nlevel-seed=1234\nview-distance=6\nserver-port=%s\n' "$port" \
+            printf 'level-name=world\nlevel-seed=1234\nview-distance=6\nserver-port=%s\n' "$port" \
                 > "$serverDir/server.properties"
         fi
         : > "$serverDir/cmd.txt"
         cd "$serverDir"
         # the tail pid is kept so stop works without pkill, which git bash lacks
         (tail -f cmd.txt & echo $! > tail.pid; wait) \
-            | B173_ASSETS="$assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
+            | B173_AUTH_PASSPHRASE="${B173_AUTH_PASSPHRASE:-modtest-vault-key}" B173_ASSETS="$assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
         echo $! > server.pid
         for _ in $(seq 60); do
             grep -q "Done (" console.txt 2>/dev/null && break
@@ -57,7 +57,8 @@ case "${1:-}" in
     client)
         name="${2:-Tester}"
         cd "$clientDir"
-        B173_DEVSHOT=1 B173_ASSETS="$assets" nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
+        # test passwords for the throwaway test server, each name registers on first join
+        B173_TEST_PASSWORD="${B173_TEST_PASSWORD:-modtest-password}" B173_DEVSHOT=1 B173_ASSETS="$assets" nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
         echo $! > client.pid
         for _ in $(seq 60); do
             grep -q "logged in" "$serverDir/console.txt" 2>/dev/null && break
