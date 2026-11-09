@@ -75,7 +75,12 @@ fn register(_ctx: &mut RegisterCtx) -> Result<()>
 }
 EOF
 
-$monorepo || printf 'target/\nassets/\nreference/\nCargo.lock\n' > .gitignore
+# assets of a ported mod belong to its authors and are never committed
+if $monorepo; then
+    echo "$modid/assets/" >> "$ports/.gitignore"
+else
+    printf 'target/\nassets/\nreference/\nCargo.lock\n' > .gitignore
+fi
 cat > rustfmt.toml <<'EOF'
 edition = "2024"
 unstable_features = true
@@ -94,6 +99,23 @@ imports_granularity = "Module"
 group_imports = "One"
 use_field_init_shorthand = true
 blank_lines_upper_bound = 1
+EOF
+
+cat > README.md <<EOF
+# $name
+
+Port of $name to the b1.7.3_rewrite mod loader. One \`.b173mod\` runs on the client and the server.
+
+## Assets
+
+The textures, sounds and lang files belong to the original authors and are not in this repository. Supply them from
+your own copy of the original mod jar before building:
+
+\`\`\`
+../../tools/modport/py.sh extract_assets.py <path to $(basename "$jar")> $modid
+\`\`\`
+
+This fills \`assets/$modid/\`, which stays untracked.
 EOF
 
 cat > PORT_STATUS.md <<EOF
