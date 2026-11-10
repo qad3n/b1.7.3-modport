@@ -57,8 +57,7 @@ case "${1:-}" in
     client)
         name="${2:-Tester}"
         cd "$clientDir"
-        # test passwords for the throwaway test server, each name registers on first join
-        B173_TEST_PASSWORD="${B173_TEST_PASSWORD:-modtest-password}" B173_DEVSHOT=1 B173_ASSETS="$assets" nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
+        B173_DEVSHOT=1 B173_ASSETS="$assets" nohup "$game/target/release/beta173$exe" "$name" - "127.0.0.1:$port" > console.txt 2>&1 &
         echo $! > client.pid
         for _ in $(seq 60); do
             grep -q "logged in" "$serverDir/console.txt" 2>/dev/null && break
