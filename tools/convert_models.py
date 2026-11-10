@@ -13,7 +13,10 @@ The output expects `fn part(...)` and `fn cuboid(...)` from the mod's own models
 import argparse
 import math
 import re
+import copy
+import random
 import sys
+import types
 from pathlib import Path
 
 # SRG name to meaning for the calls and fields models use
@@ -90,14 +93,17 @@ class Part:
 
 
 def snake(name):
-    name = re.sub(r"Model$", "", name)
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    # FooModel and ModelFoo both name foo, a run of capitals stays one word, ModelTFBoar is tf_boar
+    name = re.sub(r"^Model(?=[A-Z])|Model$", "", name)
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", name).lower()
 
 
 class Converter:
     def __init__(self, cls, args):
         self.cls = cls
-        self.env = {"Math": math, "PI": math.pi, "true": True, "false": False}
+        # a model's own java.util.Random, seeded so the converted texture offsets stay the same run to run
+        seeded = random.Random(cls)
+        self.env = {"Math": math, "PI": math.pi, "true": True, "false": False, "rand": types.SimpleNamespace(nextInt=seeded.randrange)}
         self.env.update(args)
         self.texture = [64, 32]
         self.parts = {}
@@ -105,6 +111,8 @@ class Converter:
         self.aliases = {}
         self.named = {}
         self.boxNames = {}
+        self.helpers = {}
+        self.calls = 0
 
     def value(self, text):
         text = CAST.sub("", text.strip())
@@ -112,6 +120,10 @@ class Converter:
         text = text.replace("Math.PI", "math.pi").replace("(float) Math.PI", "math.pi").replace("this.", "")
         text = re.sub(r"\bMathHelper\.func_76126_a\b|\bMathHelper\.sin\b", "math.sin", text)
         text = re.sub(r"\bMathHelper\.func_76134_b\b|\bMathHelper\.cos\b", "math.cos", text)
+        # a Java ternary, cond ? a : b, as a Python conditional expression
+        ternary = re.match(r"^(.+?)\?(.+?):(.+)$", text)
+        if ternary:
+            text = f"({ternary.group(2)}) if ({condition(ternary.group(1))}) else ({ternary.group(3)})"
         try:
             return eval(text, {"__builtins__": {}, "math": math}, self.env)
         except Exception as error:
@@ -131,6 +143,41 @@ class Converter:
         self.parts[field] = part
         if not existing:
             self.order.append(field)
+
+    def expand(self, ref):
+        # this.makePart(a, b) runs the helper's body with fresh names for its locals and gives back the part it returns
+        call = re.match(r"\s*(?:this\.)?(\w+)\((.*)\)\s*$", ref)
+        if not call or call.group(1) not in self.helpers:
+            return ref
+        params, statements = self.helpers[call.group(1)]
+        self.calls += 1
+        prefix = f"{call.group(1)}_{self.calls}_"
+        for param, arg in zip(params, split(call.group(2))):
+            self.env[param] = self.value(arg)
+        locals_ = set(re.findall(r"ModelRenderer (\w+) =", " ".join(statements)))
+        renamed = []
+        for statement in statements:
+            statement = re.sub(r"^ModelRenderer ", "", statement)
+            for name in locals_:
+                statement = re.sub(rf"\b{name}\b", prefix + name, statement)
+            renamed.append(statement)
+        result = None
+        for statement in renamed:
+            returned = re.match(r"return (\w+);$", statement)
+            if returned:
+                result = returned.group(1)
+                break
+            self.statement(statement)
+        return result or ref
+
+    def inherit(self, parent):
+        self.texture = list(parent.texture)
+        self.parts = copy.deepcopy(parent.parts)
+        self.order = list(parent.order)
+        self.aliases = dict(parent.aliases)
+        self.named = dict(parent.named)
+        self.boxNames = dict(parent.boxNames)
+        self.env.update({key: value for key, value in parent.env.items() if key not in self.env})
 
     def base(self, kind, args):
         if kind == "quadruped":
@@ -199,6 +246,11 @@ class Converter:
         if re.search(r"new ModelRenderer\[", line) or line in ("}", "{"):
             return
         line = self.indexed(line)
+        creation = re.match(r"(?:this\.)?(\w+ = new ModelRenderer\((?:[^()]|\([^()]*\))*\)\..+)$", line)
+        if creation:
+            for single in initialized(creation.group(1)):
+                self.statement(single)
+            return
         helper = re.match(r"(?:this\.)?(?:setRotation|setRotateAngle|setRotationAngle)\((?:this\.)?(\w+),\s*(.+)\)$", line)
         if helper:
             self.part(helper.group(1)).rotation = [float(self.value(a)) for a in split(helper.group(2))]
@@ -222,14 +274,29 @@ class Converter:
         if offset:
             self.named[offset.group(1)] = [int(self.value(offset.group(2))), int(self.value(offset.group(3)))]
             return
-        create = re.match(r"(?:this\.)?(\w+)\s*=\s*new ModelRenderer\(this(?:,\s*([^,]+),\s*([^)]+))?\)$", line)
-        if create:
-            uv = (int(self.value(create.group(2))), int(self.value(create.group(3)))) if create.group(2) else (0, 0)
+        create = re.match(r"(?:this\.)?(\w+)\s*=\s*new ModelRenderer\((.*)\)$", line)
+        # 1.x passes the model first, beta's ModelRenderer takes only the texture offset
+        created = [arg for arg in split(create.group(2)) if arg.strip() != "this"] if create else None
+        if create and created is not None and len(created) in (0, 2):
+            uv = (int(self.value(created[0])), int(self.value(created[1]))) if created else (0, 0)
             self.new(create.group(1), uv)
             return
         alias = re.match(r"(?:this\.)?(\w+)\s*=\s*(?:this\.)?(\w+)$", line)
         if alias and alias.group(2) in self.parts:
             self.aliases[alias.group(1)] = alias.group(2)
+            return
+        # a plain field the constructor sets, kept as a value later statements may read
+        field = re.match(r"(?:this\.)?(\w+)\s*=\s*([^=].*)$", line)
+        if field and field.group(1) not in self.parts and "new " not in field.group(2):
+            try:
+                self.env[field.group(1)] = self.value(field.group(2))
+                return
+            except ValueError:
+                pass
+        chain = chained(line)
+        if chain:
+            for single in chain:
+                self.statement(single)
             return
         call = re.match(r"(?:this\.)?([\w.]+?)\.(\w+)\((.*)\)$", line)
         if call and CALLS.get(call.group(2)):
@@ -254,7 +321,7 @@ class Converter:
             elif kind == "setTextureOffset":
                 part.box_uv = [int(self.value(a)) for a in args]
             elif kind == "addChild":
-                self.part(args[0]).parent = part.name
+                self.part(self.expand(args[0])).parent = part.name
             return
         step = re.match(r"(.+)(\+\+|--)$", line)
         if step:
@@ -274,6 +341,40 @@ class Converter:
             return
         if not re.match(r"(?:this\.)?field_78117_n\s*=", line):
             print(f"warning {self.cls}: skipped `{line}`", file=sys.stderr)
+
+
+def initialized(initializer):
+    # name = new ModelRenderer(this, u, v).setTextureOffset(...).addBox(...) as the creation and then each call
+    created = re.match(r"(\w+) = (new ModelRenderer\((?:[^()]|\([^()]*\))*\))(.*)$", initializer)
+    if not created:
+        return [initializer]
+    name, rest = created.group(1), created.group(3)
+    calls = chained(f"{name}{rest}") if rest else None
+    return [f"{name} = {created.group(2)}"] + (calls or ([f"{name}{rest}"] if rest else []))
+
+
+def chained(line):
+    # part.setTextureOffset(u, v).addBox(...) as one call per statement on the same part, the builder returns itself
+    head = re.match(r"((?:this\.)?[\w.]+?)\.(\w+)\(", line)
+    if not head or not CALLS.get(head.group(2)):
+        return None
+    target, rest, calls = head.group(1), line[len(head.group(1)):], []
+    while rest:
+        found = re.match(r"\.(\w+)\(", rest)
+        if not found:
+            return None
+        depth, end = 0, None
+        for index in range(len(found.group(0)) - 1, len(rest)):
+            depth += rest[index] == "("
+            depth -= rest[index] == ")"
+            if depth == 0:
+                end = index
+                break
+        if end is None:
+            return None
+        calls.append(f"{target}{rest[:end + 1]}")
+        rest = rest[end + 1:]
+    return calls if len(calls) > 1 else None
 
 
 def condition(text):
@@ -301,11 +402,31 @@ def indent(source, match):
     return source[lineStart:match.start()]
 
 
+def method(source, name):
+    # the parameters and statements of a helper that builds and returns a part
+    found = re.search(r"ModelRenderer " + name + r"\(([^)]*)\)\s*\{", source)
+    start = found.end()
+    depth, index = 1, start
+    while depth:
+        depth += source[index] == "{"
+        depth -= source[index] == "}"
+        index += 1
+    params = [p.split()[-1] for p in found.group(1).split(",") if p.strip()]
+    statements, current = [], ""
+    for line in source[start:index - 1].splitlines():
+        current += " " + line.strip()
+        if current.strip().endswith(";") or current.strip().endswith("{") or current.strip().endswith("}"):
+            statements.append(current.strip())
+            current = ""
+    return params, statements
+
+
 def constructor(source, cls):
     # the constructor doing the work, a this(...) delegate is skipped for the overload it calls
     matches = list(re.finditer(r"public " + cls + r"\(([^)]*)\)\s*\{", source))
     if not matches:
-        raise ValueError(f"no constructor in {cls}")
+        # the implicit constructor, only the super constructor and the field initializers run
+        return [], []
     match = max(matches, key=lambda found: source.count(";", found.end(), source.find("\n" + indent(source, found) + "}", found.end())))
     start = match.end()
     depth, index = 1, start
@@ -337,9 +458,14 @@ def emit(converter, out):
     out.append("    use crate::models::{cuboid, part};")
     out.append("    use b173_api::EntityModelSpec;")
     out.append("")
+    seen = {}
     for index, field in enumerate(converter.order):
-        name = converter.parts[field].name
-        out.append(f"    pub const {re.sub(r'(?<!^)(?=[A-Z])', '_', name).upper()}: u16 = {index};")
+        const = re.sub(r'(?<!^)(?=[A-Z])', '_', converter.parts[field].name).upper()
+        # a subclass field named like a base class part, ModelTFMinoshroom's body beside the biped body
+        seen[const] = seen.get(const, 0) + 1
+        if seen[const] > 1:
+            const = f"{const}_{seen[const]}"
+        out.append(f"    pub const {const}: u16 = {index};")
     count = len(converter.order)
     pivots = ", ".join("[" + ", ".join(map(rust_float, converter.parts[field].pivot)) + "]" for field in converter.order)
     rotations = ", ".join("[" + ", ".join(map(rust_float, converter.parts[field].rotation)) + "]" for field in converter.order)
@@ -385,22 +511,40 @@ def main():
         key, value = item.split("=", 1)
         cls, param = key.split(".")
         args.setdefault(cls, {})[param] = float(value)
-    out = []
-    for file in options.files:
-        source = Path(file).read_text(encoding="utf-8")
-        cls = Path(file).stem
+    sources = {Path(file).stem: Path(file).read_text(encoding="utf-8") for file in options.files}
+    converters = {}
+
+    def convert(cls):
+        # a model extending another one given here starts from that model's parts, as its super constructor ran first
+        if cls in converters:
+            return converters[cls]
+        source = sources[cls]
         params, statements = constructor(source, cls)
         converter = Converter(cls, {param: args.get(cls, {}).get(param, 0.0) for param in params})
+        for helper in re.findall(r"(?:private|protected|public) ModelRenderer (\w+)\(", source):
+            converter.helpers[helper] = method(source, helper)
         extends = re.search(r"class " + cls + r" extends (\w+)", source)
-        if extends and extends.group(1) == "ModelBiped":
-            converter.base("biped", [])
+        parent = extends.group(1) if extends else None
         superCall = next((statement for statement in statements if statement.startswith("super(")), None)
-        if extends and extends.group(1) == "ModelQuadruped" and superCall:
+        if parent in sources:
+            converter.inherit(convert(parent))
+        elif parent in ("ModelBiped", "ModelZombie"):
+            converter.base("biped", split(superCall[len("super("):superCall.rindex(")")]) if superCall else [])
+        elif parent == "ModelQuadruped" and superCall:
             converter.base("quadruped", split(superCall[len("super("):superCall.rindex(")")]))
-        for initializer in re.findall(r"^[ \t]+(?:public |private |protected )?ModelRenderer (\w+ = new ModelRenderer\([^;]*\));", source, re.M):
-            converter.statement(initializer)
+        # ModelRenderer[] fields sized at declaration, so loops over name.length know their count
+        for array, length in re.findall(r"ModelRenderer\[\]\s+(\w+)\s*=\s*new ModelRenderer\[(\d+)\]", source):
+            converter.env[array] = types.SimpleNamespace(length=int(length))
+        for initializer in re.findall(r"^[ \t]+(?:public |private |protected )?ModelRenderer (\w+ = new ModelRenderer\([^;]*);", source, re.M):
+            for single in initialized(initializer):
+                converter.statement(single)
         converter.run([statement for statement in statements if not statement.startswith("super(")])
-        emit(converter, out)
+        converters[cls] = converter
+        return converter
+
+    out = []
+    for cls in sources:
+        emit(convert(cls), out)
     Path(options.out).write_text("\n".join(out), encoding="utf-8")
     print(f"wrote {len(options.files)} models to {options.out}")
 
