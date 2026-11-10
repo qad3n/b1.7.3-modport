@@ -12,6 +12,31 @@ optimize freely when look and gameplay stay the same. Never replace a vanilla sc
 This file is the whole map. Do not read loader design or progress docs, guides or whole SDK files to orient. Use the
 tools, then open only the one exemplar file the step needs.
 
+## Porting rules
+
+- **The game stays vanilla.** Never change, add or remove vanilla game logic or content in `b1.7.3_rewrite` (`crates/game`,
+  `crates/server`, vanilla files in `crates/client`) unless the user says to. Do not refactor a vanilla function to reuse
+  part of it: call it as it is from the loader. The mod changes the game only through the loader API.
+- **The mod adapts to beta, never the other way.** Port the mod's content into the beta world as it is:
+  - Leave out systems beta does not have: dyeing, enchanting, potions brewing, creative-only blocks, written books,
+    death messages, map copying and the like. Use the closest beta behavior, or leave the feature out, and note it once
+    in PORT_STATUS.md.
+  - Content tied to later versions (the End, newer mobs, blocks or materials) is reorganized and rebalanced so it makes
+    sense in beta: move it to a beta place, swap materials for beta ones, retune drops and costs.
+  - Never import later version content into the game to make a mod fit.
+- **Loader changes are universal.** When the API cannot do something the mod needs, extend the loader with a general
+  feature any mod could use, named and documented without the mod. Never hardcode a mod's ids, names or rules in the
+  loader. A change to an existing loader function must keep every other mod working.
+- **Vanilla files change only to grow the loader API, never for one mod.** First reach the game through hooks that
+  already exist (`api.sh hooks`) and vanilla's own extension points: registries and lists vanilla keeps
+  (`RenderEngine.registerTextureFX`, entity and block classes, vtable classes set on objects the loader creates),
+  and vanilla functions called as they are. When none fits, a new hook site is allowed: one `// rewrite:` call into
+  the loader, generic and named for what it lets any mod do, behavior-neutral with zero mods, listed in
+  `crates/modloader/hooks.toml`. Never put a mod's ids, names, rules or content in vanilla code, and never refactor or
+  change vanilla logic itself.
+- **Done means verified.** Report what was checked (builds, console tests, server logs) and what was not (client
+  visuals, multiplayer, player-driven features). Never call a port finished while PORT_STATUS.md lists open rows.
+
 ## Workspace
 
 Paths are relative to the workspace root, the folder that holds `b1.7.3_rewrite/`, `ports/` and the kit repo
@@ -66,7 +91,8 @@ in `ports/<modid>/tools/` instead of retyping them.
    recipes, worldgen and dimension, entities, machines and GUIs, structures, bosses, player systems, extra slots, item
    behaviors, sounds and particles, config. Milestones end with a deploy and a console check.
 3. **Port module by module.** Read the mod's class, check the SDK with `api.sh`, copy the pattern from an exemplar.
-   Cite the source class in PORT_STATUS.md, not in code comments.
+   Cite the source class in PORT_STATUS.md, not in code comments. Decide per feature how it fits beta (Porting rules)
+   before writing it.
 4. **Extend the loader** only when `api.sh` shows no way (checklist below).
 5. **Test** after each module with `deploy`, `cmd`, `errors`. Keep a bug list in PORT_STATUS.md instead of looping on
    one issue; fix the list at the end.
@@ -141,8 +167,9 @@ General features only, never a one-mod hack. Paths below are inside `b1.7.3_rewr
    `crates/modloader/src/entities.rs` (`ENTITY_TEMPLATES`) or `content/templates.rs` (`BLOCK_TEMPLATES`).
 3. SDK wrapper next to its siblings in `b173_api/src/{world,register,screen}.rs`, in the prelude if mods use it
    everywhere.
-4. Client side in `crates/client/src/modded/`. Vanilla code calls new behavior through a one-line hook with a
-   `// rewrite:` comment, listed with a version in `crates/modloader/hooks.toml`.
+4. Client side in `crates/client/src/modded/`, reached from an existing hook or a vanilla extension point. Only
+   when neither fits, a new generic hook line with a `// rewrite:` comment, listed with a version in
+   `crates/modloader/hooks.toml` (see Porting rules).
 5. Dev console tools in `crates/modloader/src/devtools.rs` (add to `USAGE`).
 6. `cargo build` and `cargo clippy`, then `T/test.sh deploy ports/<modid> --game`. Note the addition where the
    workspace keeps loader notes. Maintainer mode: SDK changes are committed in the SDK submodule, then bumped in the
