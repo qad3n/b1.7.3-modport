@@ -69,6 +69,7 @@ Check once per session: `test -f .modport-maintainer` in the workspace root.
 | `T/inventory.sh <src>` | Listing what a mod registers: blocks, items and entities with classes, tiles, models, renderers, GUIs, worldgen, events | ~15 KB for a large mod, kept in `reference/inventory.txt` |
 | `T/api.sh` | Before writing code against the SDK. `sdk <file>` (world, register, screen, behavior, events, terrain, config, services), `spec <Struct>`, `enum <Name>` (HostCall, EntityField, ModelOp), `templates`, `events`, `console`, `hooks` | one line per signature with SDK line numbers |
 | `T/py.sh extract_assets.py <jar> <modid>` | Once, from the port folder. Textures, sounds and lang into `assets/<modid>`, lang keys mapped to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>` | never committed |
+| `T/py.sh split_sheet.py <sheet.png> <names.txt> <out>` | Old-style jars (ModLoader, Forge before 1.5) that draw from 16x16 grid sheets. names.txt lines are `<slot> <name> [span]`, out is `assets/<modid>/textures/block` or `item` | one png per sprite, never committed |
 | `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
 | `T/test.sh deploy ports/<modid> [--game]` | Every test cycle. Builds, stops the test server, installs the mod alone, starts the server. `--game` first rebuilds the game and cargo-b173 (after loader or SDK changes). Refuses while a test server runs: another session may own it, ask before `--force` | server console tail |
 | `T/test.sh errors [n]` | First thing after any failure | panic, trap and error lines of both logs |
@@ -77,14 +78,18 @@ Check once per session: `test -f .modport-maintainer` in the workspace root.
 
 Console (`T/modtest.sh cmd loader ...`, syntax from `T/api.sh console`): `gen`, `map` (top-down PNG), `slice` (vertical
 cut PNG), `column` (check before `tp`: a player teleported into terrain suffocates), `fill`, `tp`, `use`, `interact`,
-`close`, `entities`, `summon`, `slot`, `tile`. Read PNGs with the Read tool. Put repeated check chains in small scripts
+`close`, `entities`, `summon`, `slot`, `tile`, `texturepack export [folder]` (the vanilla files as a modern pack, for
+sprite names). Read PNGs with the Read tool. Put repeated check chains in small scripts
 in `ports/<modid>/tools/` instead of retyping them.
 
 ## Workflow
 
 1. **Set up.** Pick the source version closest to beta (1.7.10 over 1.12 over 1.21): its models, textures and data
    shapes map almost 1:1. 1.7.10 jars use SRG names (`func_`, `field_`): read meaning from use, do not hunt mappings.
-   Run `new_port.sh`, then `extract_assets.py`. Copy vanilla model classes a mod model extends into
+   Run `new_port.sh`, then `extract_assets.py`. Ports use the modern resource pack layout only, one file per sprite
+   under `assets/<modid>/textures/`, sounds under `sounds/`, lang in `lang/en_US.lang` or `lang/en_us.json`: the game
+   loads each mod as a texture pack layer and player packs replace any of it. An old-style jar's grid sheets go through
+   `split_sheet.py`, never into the port as sheets or root paths. Copy vanilla model classes a mod model extends into
    `reference/vanilla/` for the converter. Port specific asset extras (sprites from 3D renderers) go in the port's own
    `tools/` script.
 2. **Plan.** Turn `reference/inventory.txt` into PORT_STATUS.md todo rows in dependency order: blocks and items,
