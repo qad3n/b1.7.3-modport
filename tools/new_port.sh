@@ -104,7 +104,7 @@ EOF
 cat > README.md <<EOF
 # $name
 
-Port of $name to the b1.7.3_rewrite mod loader. One \`.b173mod\` runs on the client and the server.
+Port of $name to the b1.7.3_rewrite mod loader. One \`.bmod\` runs on the client and the server.
 
 ## Assets
 
@@ -122,7 +122,7 @@ cat > PORT_STATUS.md <<EOF
 # $name port status
 
 Source: $(basename "$jar") (\`reference/src\`, Vineflower decompile, never committed).
-Target: b1.7.3_rewrite mod loader, one \`$modid-<version>.b173mod\` for client and server.
+Target: b1.7.3_rewrite mod loader, one \`$modid-<version>.bmod\` for client and server.
 Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $modid\` fills \`assets/$modid\`.
 
 ## Inventory

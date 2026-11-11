@@ -2,7 +2,7 @@
 
 A Claude Code skill and a few scripts for porting Minecraft Java mods to the
 [b1.7.3_rewrite](https://github.com/qad3n/b1.7.3-rust-rewrite) mod loader. A port is a Rust rewrite of the mod that
-builds to one `.b173mod` file for both client and server.
+builds to one `.bmod` file for both client and server.
 
 ## Setup
 

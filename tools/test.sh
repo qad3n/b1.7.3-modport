@@ -38,9 +38,9 @@ deploy()
     fi
     cargoB173 build --path "$port"
     local mod
-    mod=$(ls -t "$port"/target/*.b173mod | head -1)
+    mod=$(ls -t "$port"/target/*.bmod | head -1)
     "$modtest" stop
-    rm -f "$serverDir/mods/"*.b173mod "$clientDir/mods/"*.b173mod
+    rm -f "$serverDir/mods/"*.bmod "$clientDir/mods/"*.bmod
     "$modtest" install "$mod"
     "$modtest" server
 }

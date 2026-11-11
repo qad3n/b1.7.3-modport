@@ -1,6 +1,6 @@
 ---
 name: modport
-description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3_rewrite mod loader as one .b173mod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3.
+description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3_rewrite mod loader as one .bmod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3.
 ---
 
 # Port a mod to the b1.7.3_rewrite loader
