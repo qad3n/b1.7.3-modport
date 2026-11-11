@@ -22,6 +22,25 @@ tools, then open only the one exemplar file the step needs.
   exemplars do. Hand-roll logic only when `api.sh` shows nothing that fits, and then prefer extending the SDK with a
   general feature (below) over a private workaround inside the port. Never reimplement in a port what the SDK already
   provides, and never cut or simplify a feature because the SDK route takes more work.
+- **Names, tags and states, never ids.** Numeric ids and metadata are the engine's runtime handles, reassigned on
+  every remap. A port never keeps its own id cache (`ids.rs`) or compares against looked-up numbers:
+  - identity by name: `world.is(pos, "rubber_wood")`, `ctx.is(...)`, `blockIs(block, name)`, `ItemRef::is`, place
+    with `world.place` or `world.setBlockState`. A bare name means the mod's own namespace.
+  - groups by tag: `world.tagged(pos, "minecraft:logs")`, `blockTagged`, `ItemRef::tagged`. Never write a list of
+    vanilla names (soil, logs, leaves, stone, wool, ores, tools). Use the vanilla tags the loader seeds
+    (`minecraft:dirt`, `minecraft:base_stone_overworld`, `c:ores/iron`, `minecraft:pickaxes` and the rest in the
+    author guide) or add a `c:` tag, and put the mod's own blocks and items in the tags they belong to (rubber wood in
+    `minecraft:logs`), so other mods' content takes part without either knowing the other.
+  - variants by state: blocks with variants, facings or flags register named properties (`ctx.blocks().states`) and
+    read and write them with `StateData` (`of`, `with`, `get`, `flag`). No meta bit masks.
+  - vanilla textures by sprite name: `minecraft:block/oak_leaves`, `minecraft:item/stick`, not sheet slots.
+  - shared helpers belong in the SDK once. A port never copies a helper another port already has.
+- **Everything goes through a registry.** The loader must know everything a mod does so it can organize loading and
+  mods work together with no manual setup. Recipes, machine recipes, fuels, loot, worldgen, structures, dimensions,
+  biomes, fluids, energy, effects, attributes, particles, achievements, game rules, config, lang, entities and spawns
+  are registered, and machines look up their registered recipes instead of keeping private tables. Items, fluids and
+  energy move through capabilities and services, never by checking for the mod's own blocks. Inputs take tags so
+  other mods' content feeds in. A missing registry becomes a general SDK builder.
 - **The game stays vanilla.** Never change, add or remove vanilla game logic or content in `b1.7.3_rewrite` (`crates/game`,
   `crates/server`, vanilla files in `crates/client`) unless the user says to. Do not refactor a vanilla function to reuse
   part of it: call it as it is from the loader. The mod changes the game only through the loader API.
@@ -79,6 +98,7 @@ Check once per session: `test -f .modport-maintainer` in the workspace root.
 | `T/py.sh extract_assets.py <jar> <modid>` | Once, from the port folder. Textures, sounds and lang into `assets/<modid>`, lang keys mapped to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>` | never committed |
 | `T/py.sh split_sheet.py <sheet.png> <names.txt> <out>` | Old-style jars (ModLoader, Forge before 1.5) that draw from 16x16 grid sheets. names.txt lines are `<slot> <name> [span]`, out is `assets/<modid>/textures/block` or `item` | one png per sprite, never committed |
 | `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
+| `T/audit.sh ports/<modid>` | After each module and before calling a port done. Lists code that bypasses names, tags, states and registries: numeric id lookups and comparisons, meta bits, blocks placed by number, numeric items, vanilla sheet slot textures, lists of vanilla names, a private `ids.rs` | hits per rule with file:line, `clean` and exit 0 when none |
 | `T/test.sh deploy ports/<modid> [--game]` | Every test cycle. Builds, stops the test server, installs the mod alone, starts the server. `--game` first rebuilds the game and cargo-b173 (after loader or SDK changes). Refuses while a test server runs: another session may own it, ask before `--force` | server console tail |
 | `T/test.sh errors [n]` | First thing after any failure | panic, trap and error lines of both logs |
 | `T/modtest.sh cmd <console line>` / `log server 80` | Driving and checking the server | reply lines only |
@@ -102,15 +122,19 @@ in `ports/<modid>/tools/` instead of retyping them.
    `tools/` script.
 2. **Plan.** Turn `reference/inventory.txt` into PORT_STATUS.md todo rows in dependency order: blocks and items,
    recipes, worldgen and dimension, entities, machines and GUIs, structures, bosses, player systems, extra slots, item
-   behaviors, sounds and particles, config. Milestones end with a deploy and a console check.
+   behaviors, sounds and particles, config. Each row names the registry it goes through (Registry map below) and the
+   tags its content joins. Milestones end with a deploy and a console check.
 3. **Port module by module.** Read the mod's class to learn what the feature does, find the SDK system that covers it
-   with `api.sh`, copy the pattern from an exemplar.
+   with `api.sh`, copy the pattern from an exemplar. Every Java `blockID ==`, `instanceof` on a mod block, metadata
+   mask, private recipe map or hardcoded block list is translated to a name, tag, state or registry entry, never
+   copied. Run `T/audit.sh` when the module builds.
    Cite the source class in PORT_STATUS.md, not in code comments. Decide per feature how it fits beta (Porting rules)
    before writing it.
 4. **Extend the loader** only when `api.sh` shows no way (checklist below).
 5. **Test** after each module with `deploy`, `cmd`, `errors`. Keep a bug list in PORT_STATUS.md instead of looping on
    one issue; fix the list at the end.
-6. **Finish.** Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3_rewrite`.
+6. **Finish.** `T/audit.sh ports/<modid>` prints `clean`, or every remaining hit is listed in PORT_STATUS.md with
+   why it stays (an air check, a tag list, a vanilla API that only takes numbers). Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3_rewrite`.
    Commit only when asked: a port holds Rust source, tools and manifests, never assets, `reference/` or AI files.
    `ports/` is either one git repo per port or a monorepo with one folder per mod; `new_port.sh` detects which.
    In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
@@ -145,6 +169,25 @@ lighting) in the entity's `pose`; `onLivingUpdate`/`updateEntityActionState` go 
 (single player loops packets back, same code both sides); client side motion on mobs and other players does nothing in
 multiplayer since the server drives their positions, so port such code to the server; validate every serverbound payload; chat through
 `translate("<modid>.gui.…")`; sounds as `<modid>.<path.with.dots>`; textures as `<modid>:<path>`.
+
+Registry map. Each source concept goes to one loader system (`T/api.sh sdk register` lists the builders):
+
+| Source | Loader |
+|---|---|
+| `Block`/`Item` classes, `blockID`, `itemID` | `ctx.blocks()`/`ctx.items()` rows, identity by name (`world.is`, `blockIs`, `ItemRef::is`) |
+| Metadata, `BlockState` | `ctx.blocks().states`, `StateData::of/with/get/flag` |
+| `OreDictionary`, hardcoded block or item lists | tags: seeded `minecraft:` and `c:` tags, `ctx.tags()`, `.tag()` on the mod's own rows |
+| `CraftingManager`, `FurnaceRecipes`, `GameRegistry.addRecipe` | `ctx.recipes()`, tag ingredients (`keyTag` in shaped) |
+| Machine recipe maps (macerator, enchanter, assembly) | `ctx.machines()`, the machine reads its registered recipes when it runs |
+| Fuel handlers, burn time tables | `ctx.recipes().fuel`, read back with `fuelTicks` |
+| Loot in chests, dungeon rewards, mob drops | `ctx.loot()` |
+| `IWorldGenerator`, ore gen, trees, structures | `ctx.worldgen()`, `ctx.structures()` |
+| Dimensions, biomes | `ctx.dimensions()`, biome tags |
+| Liquids, `LiquidStack` | `ctx.fluids()` |
+| Power (EU, MJ) | `ctx.energy()` |
+| `IInventory` access, pipes, cables, tanks | capabilities: `insertItem`, `extractItem`, `fillFluid`, `drainFluid`, `sendEnergy`; `ctx.services()` for mod APIs |
+| Potions, attributes, particles, achievements, game rules, config, lang | `ctx.effects()`, `attributes()`, `particles()`, `achievements()`, `gameRules()`, `config()`, `lang()` |
+| `EntityList`, spawn lists | `ctx.entities()`, spawn rules, `modifySpawns` |
 
 Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeric id:
 - **Block variants and facing.** Source metadata or block states become named states: `ctx.blocks().states(name, BlockStatesSpec)` or `data/<modid>/states/<block>.toml`.
@@ -193,6 +236,16 @@ Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in 
 `b173_api/src/world.rs`.
 
 ## Known traps
+
+- A numeric id from `world.block(pos)`, a callback or a stack is a runtime handle. It changes on every remap, and mod
+  ids sit above beta's 256, so any table sized for beta ids overflows. Compare through `blockIs`/`blockTagged`, never
+  against a looked-up number.
+- A block with more than 16 states has hidden page ids. `nameOf` and `world.is` answer with the block's own name for
+  every page; a raw number compare misses all but the first page.
+- A vanilla texture string that names no sprite fails registration. Use `minecraft:block/<sprite>` (names from
+  `loader texturepack export`).
+- A tag the port reads but nothing fills is empty, not an error. Tag the mod's own content and check
+  `tagMembers` in a console test.
 
 - `HostCall`, `HostReply` and spec structs are postcard encoded. Never add a field to an existing struct: ABI 2 guests would stop decoding. New data needs a new variant or a new struct.
 
