@@ -11,8 +11,9 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
-# the test game keeps its own data folder in the build output so tests never touch the player's worlds
-export B173_HOME="$game/target/modtest"
+# the test game keeps its own data folder in the build output so tests never touch the player's worlds, MODTEST_HOME
+# and MODTEST_PORT give a parallel session its own server
+export B173_HOME="${MODTEST_HOME:-$game/target/modtest}"
 clientDir="$B173_HOME"
 serverDir="$B173_HOME/server"
 port="${MODTEST_PORT:-25566}"
@@ -44,8 +45,9 @@ case "${1:-}" in
         fi
         : > "$serverDir/cmd.txt"
         cd "$serverDir"
-        # the tail pid is kept so stop works without pkill, which git bash lacks
-        (tail -f cmd.txt & echo $! > tail.pid; wait) \
+        # the tail pid is kept so stop works without pkill, which git bash lacks; no stream of the caller stays open,
+        # so a piped deploy returns once the server is up
+        (tail -f cmd.txt & echo $! > tail.pid; wait) 2> /dev/null \
             | B173_AUTH_PASSPHRASE="${B173_AUTH_PASSPHRASE:-modtest-vault-key}" B173_ASSETS="$assets" nohup "$game/target/release/beta173_server$exe" > console.txt 2>&1 &
         echo $! > server.pid
         for _ in $(seq 60); do

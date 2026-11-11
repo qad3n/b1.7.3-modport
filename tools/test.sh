@@ -8,8 +8,9 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 modtest="$kitTools/modtest.sh"
-# the test game keeps its own data folder in the build output so tests never touch the player's worlds
-export B173_HOME="$game/target/modtest"
+# the test game keeps its own data folder in the build output so tests never touch the player's worlds, MODTEST_HOME
+# and MODTEST_PORT give a parallel session its own server
+export B173_HOME="${MODTEST_HOME:-$game/target/modtest}"
 clientDir="$B173_HOME"
 serverDir="$B173_HOME/server"
 
