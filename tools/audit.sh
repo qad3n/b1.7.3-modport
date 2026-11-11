@@ -29,6 +29,8 @@ rules=(
     'on::<ChunkPopulate>|generator\("minecraft:'
     "models and textures picked by metadata, use ctx.blocks().stateModel and textureFor"
     'fn texture\(&self, [a-z]+: i32, meta: i32\)|metas: (vec!\[[0-9]|[a-z_:]*metas\()'
+    "leaf decay set by hand, tag logs and leaves or use world.checkLeafDecay"
+    'setProperty\([^,]*, *"check_decay"|\| *CHECK_DECAY'
     "lists of vanilla names, use or add a tag"
     '^\s*"minecraft:[a-z_/]+",?\s*$|\[\s*"minecraft:[a-z_/]+",\s*"minecraft:'
 )
