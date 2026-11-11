@@ -182,7 +182,7 @@ Registry map. Each source concept goes to one loader system (`T/api.sh sdk regis
 | Fuel handlers, burn time tables | `ctx.recipes().fuel`, read back with `fuelTicks` |
 | Loot in chests, dungeon rewards, mob drops | `ctx.loot()` tables and pools; drops that depend on mob state (sheared, saddled, type, clone) through `ctx.loot().condition/count` and `PoolBuilder::when/unless/countBy`, never rolled in `onDeath` |
 | `IWorldGenerator`, ore gen, trees, structures | named features: `ctx.worldgen().add(FeatureBuilder::ore/tree)` or `custom`, saplings through `world.placeFeature`, never a `ChunkPopulate` handler or a generator on a vanilla dimension; `ctx.structures()` |
-| Dimensions, biomes | `ctx.dimensions()`, biome tags |
+| Dimensions, biomes | `ctx.dimensions()`, biome tags (tag every mod biome), `World::biomeSpawns` instead of private creature tables |
 | Liquids, `LiquidStack` | `ctx.fluids()` |
 | Power (EU, MJ) | `ctx.energy()` |
 | `IInventory` access, pipes, cables, tanks | capabilities: `insertItem`, `extractItem`, `fillFluid`, `drainFluid`, `sendEnergy`; `ctx.services()` for mod APIs |
