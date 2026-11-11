@@ -180,7 +180,7 @@ Registry map. Each source concept goes to one loader system (`T/api.sh sdk regis
 | `CraftingManager`, `FurnaceRecipes`, `GameRegistry.addRecipe` | `ctx.recipes()`, tag ingredients (`keyTag` in shaped) |
 | Machine recipe maps (macerator, enchanter, assembly) | `ctx.machines()`, the machine reads its registered recipes when it runs |
 | Fuel handlers, burn time tables | `ctx.recipes().fuel`, read back with `fuelTicks` |
-| Loot in chests, dungeon rewards, mob drops | `ctx.loot()` |
+| Loot in chests, dungeon rewards, mob drops | `ctx.loot()` tables and pools; drops that depend on mob state (sheared, saddled, type, clone) through `ctx.loot().condition/count` and `PoolBuilder::when/unless/countBy`, never rolled in `onDeath` |
 | `IWorldGenerator`, ore gen, trees, structures | named features: `ctx.worldgen().add(FeatureBuilder::ore/tree)` or `custom`, saplings through `world.placeFeature`, never a `ChunkPopulate` handler or a generator on a vanilla dimension; `ctx.structures()` |
 | Dimensions, biomes | `ctx.dimensions()`, biome tags |
 | Liquids, `LiquidStack` | `ctx.fluids()` |
