@@ -27,6 +27,8 @@ rules=(
     'minecraft:(terrain|items)/[0-9{]'
     "chunk populate handlers and generators on vanilla dimensions, register named features with ctx.worldgen()"
     'on::<ChunkPopulate>|generator\("minecraft:'
+    "models and textures picked by metadata, use ctx.blocks().stateModel and textureFor"
+    'fn texture\(&self, [a-z]+: i32, meta: i32\)|metas: (vec!\[[0-9]|[a-z_:]*metas\()'
     "lists of vanilla names, use or add a tag"
     '^\s*"minecraft:[a-z_/]+",?\s*$|\[\s*"minecraft:[a-z_/]+",\s*"minecraft:'
 )
