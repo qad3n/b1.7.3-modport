@@ -6,14 +6,22 @@ description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.
 # Port a mod to the b1.7.3_rewrite loader
 
 Java mods cannot run. A port is a Rust rewrite (wasm guest, `b173_api` SDK) that uses the decompiled mod as its spec.
-Goal: same look, feel and gameplay inside b1.7.3, from one file in both client and server `mods/`. Fix source bugs and
-optimize freely when look and gameplay stay the same. Never replace a vanilla screen: extra UI is a toggleable overlay.
+Goal: a 1:1 port of the mod's logic, features, content, look, feel and gameplay inside b1.7.3, from one file in both
+client and server `mods/`, built on the loader SDK. Fix source bugs and optimize freely when look and gameplay stay the
+same. Never replace a vanilla screen: extra UI is a toggleable overlay.
 
 This file is the whole map. Do not read loader design or progress docs, guides or whole SDK files to orient. Use the
 tools, then open only the one exemplar file the step needs.
 
 ## Porting rules
 
+- **1:1 means the mod's behavior, built the SDK way.** Every feature, mechanic, number, piece of content and the way
+  it feels and plays carries over: same rules, timings, drops, AI, sounds, particles, models, UI flow. 1:1 does not
+  mean copying the Java structure. Port each feature and concept to what the SDK already offers for it (registries,
+  builders, specs, components, behaviors, events, screens, services, `Draw` widgets) and use those systems the way the
+  exemplars do. Hand-roll logic only when `api.sh` shows nothing that fits, and then prefer extending the SDK with a
+  general feature (below) over a private workaround inside the port. Never reimplement in a port what the SDK already
+  provides, and never cut or simplify a feature because the SDK route takes more work.
 - **The game stays vanilla.** Never change, add or remove vanilla game logic or content in `b1.7.3_rewrite` (`crates/game`,
   `crates/server`, vanilla files in `crates/client`) unless the user says to. Do not refactor a vanilla function to reuse
   part of it: call it as it is from the loader. The mod changes the game only through the loader API.
@@ -95,7 +103,8 @@ in `ports/<modid>/tools/` instead of retyping them.
 2. **Plan.** Turn `reference/inventory.txt` into PORT_STATUS.md todo rows in dependency order: blocks and items,
    recipes, worldgen and dimension, entities, machines and GUIs, structures, bosses, player systems, extra slots, item
    behaviors, sounds and particles, config. Milestones end with a deploy and a console check.
-3. **Port module by module.** Read the mod's class, check the SDK with `api.sh`, copy the pattern from an exemplar.
+3. **Port module by module.** Read the mod's class to learn what the feature does, find the SDK system that covers it
+   with `api.sh`, copy the pattern from an exemplar.
    Cite the source class in PORT_STATUS.md, not in code comments. Decide per feature how it fits beta (Porting rules)
    before writing it.
 4. **Extend the loader** only when `api.sh` shows no way (checklist below).
