@@ -181,7 +181,7 @@ Registry map. Each source concept goes to one loader system (`T/api.sh sdk regis
 | Machine recipe maps (macerator, enchanter, assembly) | `ctx.machines()`, the machine reads its registered recipes when it runs |
 | Fuel handlers, burn time tables | `ctx.recipes().fuel`, read back with `fuelTicks` |
 | Loot in chests, dungeon rewards, mob drops | `ctx.loot()` |
-| `IWorldGenerator`, ore gen, trees, structures | `ctx.worldgen()`, `ctx.structures()` |
+| `IWorldGenerator`, ore gen, trees, structures | named features: `ctx.worldgen().add(FeatureBuilder::ore/tree)` or `custom`, saplings through `world.placeFeature`, never a `ChunkPopulate` handler or a generator on a vanilla dimension; `ctx.structures()` |
 | Dimensions, biomes | `ctx.dimensions()`, biome tags |
 | Liquids, `LiquidStack` | `ctx.fluids()` |
 | Power (EU, MJ) | `ctx.energy()` |

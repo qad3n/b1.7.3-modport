@@ -25,6 +25,8 @@ rules=(
     'ItemRef::Numeric\([^_)]|ItemStack::of\([0-9]'
     "vanilla textures by sheet slot, use minecraft:block/<sprite> or minecraft:item/<sprite>"
     'minecraft:(terrain|items)/[0-9{]'
+    "chunk populate handlers and generators on vanilla dimensions, register named features with ctx.worldgen()"
+    'on::<ChunkPopulate>|generator\("minecraft:'
     "lists of vanilla names, use or add a tag"
     '^\s*"minecraft:[a-z_/]+",?\s*$|\[\s*"minecraft:[a-z_/]+",\s*"minecraft:'
 )
