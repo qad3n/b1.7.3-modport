@@ -175,7 +175,7 @@ Registry map. Each source concept goes to one loader system (`T/api.sh sdk regis
 | Source | Loader |
 |---|---|
 | `Block`/`Item` classes, `blockID`, `itemID` | `ctx.blocks()`/`ctx.items()` rows, identity by name (`world.is`, `blockIs`, `ItemRef::is`) |
-| Metadata, `BlockState` | `ctx.blocks().states`, `StateData::of/with/get/flag` |
+| Metadata, `BlockState` | `ctx.blocks().states`, `StateData::of/with/get/flag`; models by state with `ctx.blocks().stateModel`, textures with `BlockBehavior::textureFor` |
 | `OreDictionary`, hardcoded block or item lists | tags: seeded `minecraft:` and `c:` tags, `ctx.tags()`, `.tag()` on the mod's own rows |
 | `CraftingManager`, `FurnaceRecipes`, `GameRegistry.addRecipe` | `ctx.recipes()`, tag ingredients (`keyTag` in shaped) |
 | Machine recipe maps (macerator, enchanter, assembly) | `ctx.machines()`, the machine reads its registered recipes when it runs |
