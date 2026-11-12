@@ -92,11 +92,10 @@ Check once per session: `test -f .modport-maintainer` in the workspace root.
 
 | Tool | Use it when | Output |
 |---|---|---|
-| `T/new_port.sh <modid> <jar> [name]` | Starting a port. Writes manifests, git init, decompiles into `reference/src` (Vineflower, downloaded and verified on first use), runs the inventory | `ports/<modid>/` |
+| `T/new_port.sh <modid> <jar> [name]` | Starting a port. Writes manifests and `assets.toml`, git init, decompiles into `reference/src` (Vineflower, downloaded and verified on first use), runs the inventory | `ports/<modid>/` |
 | `T/inventory.sh <src>` | Listing what a mod registers: blocks, items and entities with classes, tiles, models, renderers, GUIs, worldgen, events | ~15 KB for a large mod, kept in `reference/inventory.txt` |
 | `T/api.sh` | Before writing code against the SDK. `sdk <file>` (world, register, screen, behavior, events, terrain, config, services), `spec <Struct>`, `enum <Name>` (HostCall, EntityField, ModelOp), `templates`, `events`, `console`, `hooks` | one line per signature with SDK line numbers |
-| `T/py.sh extract_assets.py <jar> <modid>` | Once, from the port folder. Textures, sounds and lang into `assets/<modid>`, lang keys mapped to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>` | never committed |
-| `T/py.sh split_sheet.py <sheet.png> <names.txt> <out>` | Old-style jars (ModLoader, Forge before 1.5) that draw from 16x16 grid sheets. names.txt lines are `<slot> <name> [span]`, out is `assets/<modid>/textures/block` or `item` | one png per sprite, never committed |
+| `T/py.sh recipe.py <jar> <modid> [--sheet <png in jar> <names.txt> <to>]... [--url <page>]` | Regenerating `assets.toml` from the port folder (`new_port.sh` writes the first one). Pins the download by name and sha256, copies textures and sounds (lower case targets), maps lang keys to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>`. `--sheet` cuts an old-style 16x16 grid sheet: names.txt lines are `<slot> <name> [span]`, `<to>` is `textures/block` or `textures/item` | `assets.toml`, committed |
 | `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
 | `T/audit.sh ports/<modid>` | After each module and before calling a port done. Lists code that bypasses names, tags, states and registries: numeric id lookups and comparisons, meta bits, blocks placed by number, numeric items, vanilla sheet slot textures, lists of vanilla names, a private `ids.rs` | hits per rule with file:line, `clean` and exit 0 when none |
 | `T/test.sh deploy ports/<modid> [--game]` | Every test cycle. Builds, stops the test server, installs the mod alone, starts the server. `--game` first rebuilds the game and cargo-b173 (after loader or SDK changes). Refuses while a test server runs: another session may own it, ask before `--force` | server console tail |
@@ -114,12 +113,17 @@ in `ports/<modid>/tools/` instead of retyping them.
 
 1. **Set up.** Pick the source version closest to beta (1.7.10 over 1.12 over 1.21): its models, textures and data
    shapes map almost 1:1. 1.7.10 jars use SRG names (`func_`, `field_`): read meaning from use, do not hunt mappings.
-   Run `new_port.sh`, then `extract_assets.py`. Ports use the modern resource pack layout only, one file per sprite
-   under `assets/<modid>/textures/`, sounds under `sounds/`, lang in `lang/en_US.lang` or `lang/en_us.json`: the game
-   loads each mod as a texture pack layer and player packs replace any of it. An old-style jar's grid sheets go through
-   `split_sheet.py`, never into the port as sheets or root paths. Copy vanilla model classes a mod model extends into
-   `reference/vanilla/` for the converter. Port specific asset extras (sprites from 3D renderers) go in the port's own
-   `tools/` script.
+   Run `new_port.sh`. Third-party art never goes in the port's `assets/` or its `.bmod`: the `assets.toml` recipe
+   (format in `tools/rewrite/modloader-guide.md`, "Assets players supply") tells the client how to build it from the
+   player's own download in `mods/<modid>_assets/`, cached in `.cache/mods/assets/<modid>/`. The README names that
+   download. The recipe writes the modern resource pack layout only, one file per sprite under `textures/`, sounds
+   under `sounds/`, lang in `lang/en_US.lang`: the game loads each mod as a texture pack layer and player packs replace
+   any of it. An old-style jar's grid sheets become `[[slice]]` steps via `recipe.py --sheet`, never sheets or root
+   paths. Steps the generator cannot write (`[[compose]]` sprites from 3D renderers, extra downloads, renames) go in
+   the port's own `tools/recipe.py`, which runs `T/py.sh recipe.py` and appends them. Text the port writes itself
+   (names, messages, GUI labels) ships as the port's own `assets/<modid>/lang/en_US.lang`, the only file in its
+   `assets/`. Copy vanilla model classes a mod model extends into `reference/vanilla/` for the converter. For testing,
+   drop the download in the test game's `mods/<modid>_assets/` once.
 2. **Plan.** Turn `reference/inventory.txt` into PORT_STATUS.md todo rows in dependency order: blocks and items,
    recipes, worldgen and dimension, entities, machines and GUIs, structures, bosses, player systems, extra slots, item
    behaviors, sounds and particles, config. Each row names the registry it goes through (Registry map below) and the
@@ -135,7 +139,8 @@ in `ports/<modid>/tools/` instead of retyping them.
    one issue; fix the list at the end.
 6. **Finish.** `T/audit.sh ports/<modid>` prints `clean`, or every remaining hit is listed in PORT_STATUS.md with
    why it stays (an air check, a tag list, a vanilla API that only takes numbers). Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3_rewrite`.
-   Commit only when asked: a port holds Rust source, tools and manifests, never assets, `reference/` or AI files.
+   Commit only when asked: a port holds Rust source, tools, manifests, `assets.toml` and its own lang file, never
+   third-party art, `reference/` or AI files.
    `ports/` is either one git repo per port or a monorepo with one folder per mod; `new_port.sh` detects which.
    In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
 

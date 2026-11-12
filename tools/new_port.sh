@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# creates ports/<modid> from a mod jar: manifests, git repo, Vineflower decompile in reference/src, content inventory
+# creates ports/<modid> from a mod jar: manifests, assets.toml recipe, git repo, Vineflower decompile, content inventory
 #   new_port.sh <modid> <mod.jar> [display name]
 set -euo pipefail
 
@@ -54,7 +54,7 @@ version = "0.1.0"
 name = "$name"
 description = "Port of $name to b1.7.3"
 authors = ["original authors", "b173 port"]
-license = "see the original mod, assets extracted from the user's jar"
+license = "see the original mod, art built from the player's own download"
 api = "1.0"
 side = "both"
 
@@ -75,12 +75,8 @@ fn register(_ctx: &mut RegisterCtx) -> Result<()>
 }
 EOF
 
-# assets of a ported mod belong to its authors and are never committed
-if $monorepo; then
-    echo "$modid/assets/" >> "$ports/.gitignore"
-else
-    printf 'target/\nassets/\nreference/\nCargo.lock\n' > .gitignore
-fi
+# a monorepo already ignores build output and reference/
+$monorepo || printf 'target/\nreference/\nCargo.lock\n' > .gitignore
 cat > rustfmt.toml <<'EOF'
 edition = "2024"
 unstable_features = true
@@ -108,14 +104,9 @@ Port of $name to the b1.7.3_rewrite mod loader. One \`.bmod\` runs on the client
 
 ## Assets
 
-The textures, sounds and lang files belong to the original authors and are not in this repository. Supply them from
-your own copy of the original mod jar before building:
-
-\`\`\`
-../../tools/modport/py.sh extract_assets.py <path to $(basename "$jar")> $modid
-\`\`\`
-
-This fills \`assets/$modid/\`, which stays untracked.
+The textures, sounds and lang files belong to the original authors and are not in this repository or in the \`.bmod\`.
+Put your own \`$(basename "$jar")\` in the game's \`mods/${modid}_assets/\` folder. On its next launch the client builds
+the mod's art from it, following \`assets.toml\`.
 EOF
 
 cat > PORT_STATUS.md <<EOF
@@ -123,7 +114,7 @@ cat > PORT_STATUS.md <<EOF
 
 Source: $(basename "$jar") (\`reference/src\`, Vineflower decompile, never committed).
 Target: b1.7.3_rewrite mod loader, one \`$modid-<version>.bmod\` for client and server.
-Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $modid\` fills \`assets/$modid\`.
+Assets: \`assets.toml\` builds the art from \`mods/${modid}_assets/$(basename "$jar")\`, never committed or packed.
 
 ## Inventory
 
@@ -133,6 +124,9 @@ Assets: never committed, \`../../tools/modport/py.sh extract_assets.py <jar> $mo
 
 ## Todo, in order
 EOF
+
+echo "== assets.toml"
+runPython "$kitTools/recipe.py" "$jar" "$modid"
 
 $monorepo || git init -q
 
