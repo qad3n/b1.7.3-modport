@@ -39,8 +39,8 @@ tools, then open only the one exemplar file the step needs.
   - shared helpers belong in the SDK once. A port never copies a helper another port already has.
 - **Everything goes through a registry.** The loader must know everything a mod does so it can organize loading and
   mods work together with no manual setup. Recipes, machine recipes, fuels, loot, worldgen, structures, dimensions,
-  biomes, fluids, energy, effects, attributes, particles, achievements, game rules, config, lang, entities and spawns
-  are registered, and machines look up their registered recipes instead of keeping private tables. Items, fluids and
+  biomes, fluids, energy, effects, attributes, particles, achievements, stats, game rules, config, lang, entities and
+  spawns are registered, and machines look up their registered recipes instead of keeping private tables. Items, fluids and
   energy move through capabilities and services, never by checking for the mod's own blocks. Inputs take tags so
   other mods' content feeds in. A missing registry becomes a general SDK builder.
 - **The game stays vanilla.** Never change, add or remove vanilla game logic or content in `b1.7.3_rewrite` (`crates/game`,
@@ -197,7 +197,7 @@ Registry map. Each source concept goes to one loader system (`T/api.sh sdk regis
 | Liquids, `LiquidStack`, buckets, cells | `ctx.fluids()`, containers through `ctx.fluids().container`, `containedFluid`/`fill`/`drainItem`; picky extraction through `world.extractMatching` |
 | Power (EU, MJ) | `ctx.energy()` |
 | `IInventory` access, pipes, cables, tanks | capabilities: `insertItem`, `extractItem`, `fillFluid`, `drainFluid`, `sendEnergy`; `ctx.services()` for mod APIs |
-| Potions, attributes, particles, achievements, game rules, config, lang | `ctx.effects()`, `attributes()`, `particles()`, `achievements()`, `gameRules()`, `config()`, `lang()` |
+| Potions, attributes, particles, achievements, stats, game rules, config, lang | `ctx.effects()`, `attributes()`, `particles()`, `achievements()`, `stats()`, `gameRules()`, `config()`, `lang()` |
 | `EntityList`, spawn lists | `ctx.entities()`, spawn rules, `modifySpawns` |
 
 Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeric id:
