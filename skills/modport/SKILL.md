@@ -6,20 +6,22 @@ description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.
 # Port a mod to the b1.7.3_rewrite loader
 
 Java mods cannot run. A port is a Rust rewrite (wasm guest, `b173_api` SDK) that uses the decompiled mod as its spec.
-Goal: a 1:1 port of the mod's logic, features, content, look, feel and gameplay inside b1.7.3, from one file in both
-client and server `mods/`, built on the loader SDK. Fix source bugs and optimize freely when look and gameplay stay the
-same. Never replace a vanilla screen: extra UI is a toggleable overlay.
+Goal: deconstruct the mod into its content, mechanics and data, then rewrite it as a native loader mod, one file in
+both client and server `mods/`. Every piece of content ships, and everything goes through the loader's registries so
+the mod loads cleanly and works with other mods without setup. The Java is a source of facts, not a structure to
+copy. Fix source bugs and optimize freely. Never replace a vanilla screen: extra UI is a toggleable overlay.
 
 This file is the whole map. Do not read loader design or progress docs, guides or whole SDK files to orient. Use the
 tools, then open only the one exemplar file the step needs.
 
 ## Porting rules
 
-- **1:1 means the mod's behavior, built the SDK way.** Every feature, mechanic, number, piece of content and the way
-  it feels and plays carries over: same rules, timings, drops, AI, sounds, particles, models, UI flow. 1:1 does not
-  mean copying the Java structure. Port each feature and concept to what the SDK already offers for it (registries,
-  builders, specs, components, behaviors, events, screens, services, `Draw` widgets) and use those systems the way the
-  exemplars do. Hand-roll logic only when `api.sh` shows nothing that fits, and then prefer extending the SDK with a
+- **Complete content, native structure.** All of the mod is there: every block, item, entity, dimension, structure,
+  mechanic, GUI and piece of data. Gameplay values (drops, costs, timings, spawn rates) keep the source's numbers
+  unless beta forces a change. How the code is organized is not ported: write each feature the way a mod built for
+  this loader would, on what the SDK offers (registries, builders, specs, components, behaviors, events, screens,
+  services, `Draw` widgets), the way the exemplars do. Do not walk the Java class by class or mirror its classes,
+  inheritance or helper layout; read a class only to pull out a rule or a number. Hand-roll logic only when `api.sh` shows nothing that fits, and then prefer extending the SDK with a
   general feature (below) over a private workaround inside the port. Never reimplement in a port what the SDK already
   provides, and never cut or simplify a feature because the SDK route takes more work.
 - **Names, tags and states, never ids.** Numeric ids and metadata are the engine's runtime handles, reassigned on
@@ -112,7 +114,7 @@ in `ports/<modid>/tools/` instead of retyping them.
 ## Workflow
 
 1. **Set up.** Pick the source version closest to beta (1.7.10 over 1.12 over 1.21): its models, textures and data
-   shapes map almost 1:1. 1.7.10 jars use SRG names (`func_`, `field_`): read meaning from use, do not hunt mappings.
+   shapes map most directly. 1.7.10 jars use SRG names (`func_`, `field_`): read meaning from use, do not hunt mappings.
    Run `new_port.sh`. Third-party art never goes in the port's `assets/` or its `.bmod`: the `assets.toml` recipe
    (format in `tools/rewrite/modloader-guide.md`, "Assets players supply") tells the client how to build it from the
    player's own download in `mods/<modid>_assets/`, cached in `.cache/mods/assets/<modid>/`. The README names that
@@ -124,14 +126,18 @@ in `ports/<modid>/tools/` instead of retyping them.
    (names, messages, GUI labels) ships as the port's own `assets/<modid>/lang/en_US.lang`, the only file in its
    `assets/`. Copy vanilla model classes a mod model extends into `reference/vanilla/` for the converter. For testing,
    drop the download in the test game's `mods/<modid>_assets/` once.
-2. **Plan.** Turn `reference/inventory.txt` into PORT_STATUS.md todo rows in dependency order: blocks and items,
-   recipes, worldgen and dimension, entities, machines and GUIs, structures, bosses, player systems, extra slots, item
-   behaviors, sounds and particles, config. Each row names the registry it goes through (Registry map below) and the
-   tags its content joins. Milestones end with a deploy and a console check.
-3. **Port module by module.** Read the mod's class to learn what the feature does, find the SDK system that covers it
-   with `api.sh`, copy the pattern from an exemplar. Every Java `blockID ==`, `instanceof` on a mod block, metadata
-   mask, private recipe map or hardcoded block list is translated to a name, tag, state or registry entry, never
-   copied. Run `T/audit.sh` when the module builds.
+2. **Deconstruct and plan.** From `reference/inventory.txt` and the source, write down what the mod is, not how its
+   code is laid out: its content (blocks, items, entities, dimensions, structures), mechanics (what each thing does,
+   with its rules and numbers), data (recipes, machine recipes, fuels, loot, worldgen, spawns, config) and UI flow.
+   Each entry becomes a PORT_STATUS.md todo row naming the registry or system it goes through (Registry map below)
+   and the tags its content joins, in dependency order: blocks and items, recipes, worldgen and dimension, entities,
+   machines and GUIs, structures, bosses, player systems, extra slots, item behaviors, sounds and particles, config.
+   Rows with no loader fit are loader extensions to build (Extending the loader). Milestones end with a deploy and a
+   console check.
+3. **Rewrite feature by feature** from the rows, not from the Java files. Find the SDK system with `api.sh` and copy
+   the pattern from an exemplar. Open a source class only for a rule or number the row needs. Every Java `blockID ==`,
+   `instanceof` on a mod block, metadata mask, private recipe map or hardcoded block list becomes a name, tag, state
+   or registry entry, never copied. Run `T/audit.sh` when the feature builds.
    Cite the source class in PORT_STATUS.md, not in code comments. Decide per feature how it fits beta (Porting rules)
    before writing it.
 4. **Extend the loader** only when `api.sh` shows no way (checklist below).
@@ -170,7 +176,7 @@ A finished port, when the workspace has one, is the faster map. The Aether port 
 
 Shapes that always apply: renderer GL calls become `Program` ops (push, translate, rotate, scale, texture, blend,
 lighting) in the entity's `pose`; `onLivingUpdate`/`updateEntityActionState` go to `onAi` (replaces template AI) or
-`onTick`; `terrain::Random` and the noise ports keep seeds identical; check `isAuthority()` before changing the world
+`onTick`; worldgen uses `terrain::Random` and the noise ports (matching the source's exact terrain is not required); check `isAuthority()` before changing the world
 (single player loops packets back, same code both sides); client side motion on mobs and other players does nothing in
 multiplayer since the server drives their positions, so port such code to the server; validate every serverbound payload; chat through
 `translate("<modid>.gui.…")`; sounds as `<modid>.<path.with.dots>`; textures as `<modid>:<path>`.
