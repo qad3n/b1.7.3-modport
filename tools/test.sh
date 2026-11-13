@@ -3,7 +3,8 @@
 #   test.sh deploy <port dir> [--game] [--force]   build the port, stop the test server, install the port alone, start it
 #                                                  --game rebuilds the game binaries and cargo-b173 first (after loader or SDK changes)
 #                                                  --force takes over a test server that is already running
-#   test.sh errors [n]                             last n panic, trap, error and refusal lines of the test server and client
+#   test.sh errors [n]                             last n panic, trap, error, refusal and loader warning lines of the test
+#                                                  server and client, a loader warning names content the loader dropped
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
@@ -51,12 +52,13 @@ errors()
     for dir in "$serverDir" "$clientDir"; do
         [[ -f "$dir/console.txt" ]] || continue
         echo "== $(basename "$dir")"
-        grep -iE "panic|trap|error|exception|failed|refused" "$dir/console.txt" | tail -n "${1:-20}" || true
+        grep -iE "panic|trap|error|exception|failed|refused|WARN.*\[loader\]|disabled" "$dir/console.txt" | grep -vE "Resource index unavailable|s3\.amazonaws\.com" \
+            | tail -n "${1:-20}" || true
     done
 }
 
 case "${1:-}" in
     deploy) shift; deploy "$@" ;;
     errors) errors "${2:-}" ;;
-    *) sed -n '2,6p' "$0"; exit 1 ;;
+    *) sed -n '2,7p' "$0"; exit 1 ;;
 esac
