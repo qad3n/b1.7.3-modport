@@ -46,7 +46,7 @@ Everything else has a default in this file: take it and note it once in `PORT_ST
 ## Porting rules
 
 - **Complete content, native structure.** Every block, item, entity, dimension, structure, mechanic, GUI, HUD
-  element, config option and piece of data ships. Gameplay values (drops, costs, timings, spawn rates, cooldowns,
+  element, config option and piece of data ships, except block kinds and forms beta lacks (below). Gameplay values (drops, costs, timings, spawn rates, cooldowns,
   durability) keep the source's numbers. Code layout is not ported: write each feature on what the SDK offers, the
   way the exemplars do. Never cut or simplify a feature because the SDK route takes more work.
 - **Registered is not ported.** An item or block with a texture and a name but without its use, hit, tick or
@@ -71,6 +71,25 @@ Everything else has a default in this file: take it and note it once in `PORT_ST
 - **The mod adapts to beta.** Where beta lacks a system (enchanting, potions brewing, hunger, experience, creative
   mode, written books, leads, later blocks and mobs) use the closest beta behavior or leave the feature out, and
   note it once in `PORT_STATUS.md` under "Beta differences". Never import later-version content into the game.
+- **Only block kinds and forms beta has.** The mod's own inventions always ship: machines, portals, traps, ores,
+  mobs, its own mechanics. Where it re-skins a vanilla kind in its own material (logs, planks, leaves, stairs, slabs,
+  fences, doors), the port follows beta's version of that kind exactly and drops what beta's version lacks:
+  - Kinds beta has stay: logs, planks, leaves, saplings, stairs, slabs, fences, doors, trapdoors, ladders, pressure
+    plates, signs, beds, chests, torches.
+  - Kinds beta lacks are left out with their recipes, loot and tab rows, never rebuilt as new blocks: walls, fence
+    gates, glass panes, iron bars, carpets, buttons other than stone, vertical slabs, double plants, vines, lily
+    pads, flower pots, item frames, trapped chests, stained or colored variants, stripped logs, bark (all sides
+    wood) blocks, grass paths.
+  - Forms beta's kind lacks are dropped from kept blocks: logs only stand upright (no axis state, no sideways
+    placement), slabs are bottom halves joining into a double slab (no top halves), stairs never turn upside down
+    or form corners, pillars of vanilla style do not rotate.
+  - Where the mod's own trees, structures or machines place a dropped kind or form, place the nearest beta block or
+    form: a sideways or bark log becomes the upright log, a top slab the bottom slab, a wall the cobblestone or
+    fence of its material, a pane glass, bars a fence, a carpet air or wool.
+  - Orientation that is part of an invented block's function stays (a machine's front, a thorn growing along an
+    axis, a sliding trap's direction).
+  - In the ledger these rows are "left out" or "beta form" from the start, so no work goes into them, and one
+    "Beta differences" row lists them, which accounts for their `coverage.sh names` lines.
 - **Source bugs.** Fix a plain bug (a flag never set, a counter that leaks, a loop that cannot end) and list it
   under "Source bugs fixed". Keep quirks players rely on (an unkeyed recipe letter that leaves a slot empty).
 - **Loader changes are universal.** A new loader feature is general, named and documented without the mod, and keeps
@@ -130,7 +149,8 @@ before `tp`), `fill`, `tp`, `use`, `interact`, `close`, `entities`, `summon`, `s
    - The client overlay and HUD classes, key bindings, packets (each packet is a client to server or server to
      client flow to rebuild on channels or synced state).
    Each row names the loader system it goes through (Registry map), the tags its content joins and, where beta
-   lacks it, the beta decision. Rows with no loader fit are marked "loader" and built in step 4. Order the rows:
+   lacks it, the beta decision. Rows for block kinds beta lacks (see "Only block kinds and forms beta has") are
+   written as "left out" or "beta form" straight away, so no work goes into them. Rows with no loader fit are marked "loader" and built in step 4. Order the rows:
    blocks and items, recipes and data, worldgen and dimension, entities, machines and GUIs, structures, bosses,
    player systems and events, HUD, sounds and particles, config.
 3. **Build row by row.** For each row: `T/api.sh find`, copy the pattern from an exemplar, read the one source
