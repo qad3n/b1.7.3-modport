@@ -3,7 +3,8 @@
 #   api.sh                      every topic below
 #   api.sh sdk [file]           pub signatures of b173_api, optionally one file (world, register, screen, terrain, ...)
 #   api.sh spec [Struct]        fields of a mod_protocol::spec struct (EntitySpec, BlockSpec, ItemSpec, ...)
-#   api.sh enum <Name>          variants of a mod_protocol::abi enum (HostCall, EntityField, EventKind, ModelOp, ...)
+#   api.sh enum <Name>          variants of a mod_protocol enum (EntityField, EventKind, ModelOp, WorldRequest, ...)
+#   api.sh find <word>          SDK signatures and protocol variants naming the word, the fastest way to an API
 #   api.sh templates            block and entity template names
 #   api.sh events               EventKind names
 #   api.sh console              loader dev console usage
@@ -28,16 +29,28 @@ sdkIndex()
         | grep -vE ' fn overridden\(' || true
 }
 
+# every protocol source, the abi is one file in old SDKs and a folder of files since API 2.0
+protocolFiles()
+{
+    find "$protocol" -name '*.rs' | sort
+}
+
 enumVariants()
 {
-    awk -v name="$1" '$0 ~ "pub enum " name "( |$)" { on = 1; next } on && /^}/ { exit } on' "$protocol/abi.rs" "$protocol/spec.rs" \
+    if [[ "$1" == HostCall ]]; then
+        printf 'HostCall is one enum per group, ask for a group: '
+        protocolFiles | tr '\n' '\0' | xargs -0 grep -ohE '^pub enum [A-Za-z]+Request' | cut -d' ' -f3 | tr '\n' ' '
+        echo
+        return
+    fi
+    protocolFiles | tr '\n' '\0' | xargs -0 awk -v name="$1" 'FNR == 1 { on = 0 } $0 ~ "pub enum " name "( |$)" { on = 1; next } on && /^}/ { on = 0 } on' \
         | grep -vE '^[[:space:]]*//' | grep -oE '^    [A-Z][A-Za-z0-9]*( \{[^}]*\}?|\([^)]*\))?' | sed 's/^    //' | tr '\n' ' '
     echo
 }
 
 specFields()
 {
-    awk -v name="$1" '$0 ~ "pub struct " name "( |$)" { on = 1; print; next } on && /^}/ { exit } on && /pub / { gsub(/^ +/, "  "); print }' "$protocol/spec.rs"
+    protocolFiles | tr '\n' '\0' | xargs -0 awk -v name="$1" 'FNR == 1 { on = 0 } $0 ~ "pub struct " name "( |$)" { on = 1; print; next } on && /^}/ { on = 0 } on && /pub / { gsub(/^ +/, "  "); print }'
 }
 
 templateNames()
@@ -59,6 +72,11 @@ case "${1:-all}" in
     events) enumVariants EventKind ;;
     console) grep -oE 'const USAGE: &str = "[^"]+"' "$loader/src/devtools.rs" | cut -d'"' -f2 | sed 's/ | /\n/g' ;;
     hooks) grep -E '^name = ' "$loader/hooks.toml" | cut -d'"' -f2 | tr '\n' ' '; echo ;;
+    find)
+        word="${2:?word}"
+        sdkIndex | grep -i -- "$word" || true
+        protocolFiles | tr '\n' '\0' | xargs -0 grep -hiE "^    (pub )?[A-Za-z_]*$word" | sed 's/^ */protocol: /' | cut -c1-200 | sort -u || true
+        ;;
     all)
         echo "== templates"; templateNames
         echo "== events"; enumVariants EventKind
@@ -67,5 +85,5 @@ case "${1:-all}" in
         echo "== spec structs"; "$0" spec
         echo "== sdk"; sdkIndex
         ;;
-    *) sed -n '2,11p' "$0"; exit 1 ;;
+    *) sed -n '2,12p' "$0"; exit 1 ;;
 esac
