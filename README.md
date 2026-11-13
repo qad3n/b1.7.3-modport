@@ -25,6 +25,8 @@ Open Claude Code in that folder and run `/modport` with a mod jar. The scripts i
 
 - `new_port.sh <modid> <jar>` starts a port in `ports/<modid>`
 - `test.sh deploy ports/<modid>` builds it and runs it on a test server
+- `coverage.sh all ports/<modid>` lists source content and behavior the port lacks
+- `audit.sh ports/<modid>` lists code that bypasses the loader's names, tags and registries
 - `doctor.sh` checks the setup again
 
 No game or mod assets are included. They come from jars you own.

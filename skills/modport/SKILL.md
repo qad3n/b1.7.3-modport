@@ -1,267 +1,300 @@
 ---
 name: modport
-description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3_rewrite mod loader as one .bmod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3.
+description: Port a Minecraft Java mod (any version, jar or source) to the b1.7.3_rewrite mod loader as one .bmod that runs on client and server, extending the loader and SDK where the mod needs something new. Use when the user says /modport, /port, "port this mod", or hands over a mod jar to bring to beta 1.7.3. Also use to audit a finished port against its source.
 ---
 
 # Port a mod to the b1.7.3_rewrite loader
 
-Java mods cannot run. A port is a Rust rewrite (wasm guest, `b173_api` SDK) that uses the decompiled mod as its spec.
-Goal: deconstruct the mod into its content, mechanics and data, then rewrite it as a native loader mod, one file in
-both client and server `mods/`. Every piece of content ships, and everything goes through the loader's registries so
-the mod loads cleanly and works with other mods without setup. The Java is a source of facts, not a structure to
-copy. Fix source bugs and optimize freely. Never replace a vanilla screen: extra UI is a toggleable overlay.
+Java mods cannot run. A port is a Rust rewrite (wasm guest, `b173_api` SDK, API 2.0, ABI 4) that uses the decompiled
+mod as its spec. Deconstruct the mod into content, mechanics and data, then rewrite it as a native loader mod: one
+file in both client and server `mods/`, everything through the loader's registries. The Java is a source of facts,
+not a structure to copy.
 
-This file is the whole map. Do not read loader design or progress docs, guides or whole SDK files to orient. Use the
-tools, then open only the one exemplar file the step needs.
+This file is the whole map. Follow "The run" from step 1 to step 8 without stopping to ask, except where "When to
+ask" says so.
+
+## Operating rules
+
+- **Tools first, files second.** Never read loader design or progress docs, guides or whole SDK files to orient.
+  `T/api.sh find <word>` answers "is there an API for this" in one call. Open a file only at the line a tool printed.
+- **Work from the ledger.** `PORT_STATUS.md` holds one row per piece of content, behavior and data. The run is: pick
+  the first open row, build it, check it, tick it. Never work on something that has no row; add the row first.
+- **Read the source once per row.** Open a Java class only for the rule or number its row needs, read that method,
+  close it. Never read a class top to bottom "to understand the mod", never re-read one already mined.
+- **Narrow checks.** After a change run the port build and the one console check that covers it. Run the full gates
+  (step 7) once, at the end. Never re-run a check that passed on unchanged code.
+- **Park bugs.** A bug that is not in the row being built goes in the "Bugs" list of `PORT_STATUS.md`. Fix the list
+  in step 6, not when found.
+- **Never stop early.** A turn ends only when every row is ticked, or the only open rows need a person's eyes (client
+  visuals) or a "When to ask" decision. A loader gap is work to do (Extending the loader), not a reason to stop or to
+  write the feature down as a difference.
+- **Report truthfully.** Say what was checked and how (build, console test, log), and what was not. "Checked one to
+  one" may only be said of rows that step 7's tools show as matched.
+
+## When to ask
+
+Ask the user only for these, and keep working on other rows while waiting:
+
+- starting a test client (it opens a window on their desktop), or taking over a test server another session runs
+- changing vanilla game logic beyond a generic hook line
+- a beta substitute that changes what the player must gather or do (recharge items whose ingredients beta lacks,
+  content moved to another dimension). Pick the closest beta-native choice, build it, and list it for confirmation
+- any commit, push or `gh` write
+
+Everything else has a default in this file: take it and note it once in `PORT_STATUS.md`.
 
 ## Porting rules
 
-- **Complete content, native structure.** All of the mod is there: every block, item, entity, dimension, structure,
-  mechanic, GUI and piece of data. Gameplay values (drops, costs, timings, spawn rates) keep the source's numbers
-  unless beta forces a change. How the code is organized is not ported: write each feature the way a mod built for
-  this loader would, on what the SDK offers (registries, builders, specs, components, behaviors, events, screens,
-  services, `Draw` widgets), the way the exemplars do. Do not walk the Java class by class or mirror its classes,
-  inheritance or helper layout; read a class only to pull out a rule or a number. Hand-roll logic only when `api.sh` shows nothing that fits, and then prefer extending the SDK with a
-  general feature (below) over a private workaround inside the port. Never reimplement in a port what the SDK already
-  provides, and never cut or simplify a feature because the SDK route takes more work.
-- **Names, tags and states, never ids.** Numeric ids and metadata are the engine's runtime handles, reassigned on
-  every remap. A port never keeps its own id cache (`ids.rs`) or compares against looked-up numbers:
-  - identity by name: `world.is(pos, "rubber_wood")`, `ctx.is(...)`, `blockIs(block, name)`, `ItemRef::is`, place
-    with `world.place` or `world.setBlockState`. A bare name means the mod's own namespace.
+- **Complete content, native structure.** Every block, item, entity, dimension, structure, mechanic, GUI, HUD
+  element, config option and piece of data ships. Gameplay values (drops, costs, timings, spawn rates, cooldowns,
+  durability) keep the source's numbers. Code layout is not ported: write each feature on what the SDK offers, the
+  way the exemplars do. Never cut or simplify a feature because the SDK route takes more work.
+- **Registered is not ported.** An item or block with a texture and a name but without its use, hit, tick or
+  interact behavior is a missing feature. Step 7's handler check exists because this is the commonest way a port
+  ends up incomplete.
+- **Names, tags and states, never ids.** Numeric ids and metadata are runtime handles, reassigned on every remap. A
+  port never keeps an id cache (`ids.rs`) or compares against looked-up numbers:
+  - identity by name: `world.is(pos, "rubber_wood")`, `blockIs(block, name)`, `ItemRef::is`; place with
+    `world.place` or `world.setBlockState`. A bare name means the mod's own namespace.
   - groups by tag: `world.tagged(pos, "minecraft:logs")`, `blockTagged`, `ItemRef::tagged`. Never write a list of
-    vanilla names (soil, logs, leaves, stone, wool, ores, tools). Use the vanilla tags the loader seeds
-    (`minecraft:dirt`, `minecraft:base_stone_overworld`, `c:ores/iron`, `minecraft:pickaxes` and the rest in the
-    author guide) or add a `c:` tag, and put the mod's own blocks and items in the tags they belong to (rubber wood in
-    `minecraft:logs`), so other mods' content takes part without either knowing the other.
-  - variants by state: blocks with variants, facings or flags register named properties (`ctx.blocks().states`) and
-    read and write them with `StateData` (`of`, `with`, `get`, `flag`). No meta bit masks.
-  - vanilla textures by sprite name: `minecraft:block/oak_leaves`, `minecraft:item/stick`, not sheet slots.
-  - shared helpers belong in the SDK once. A port never copies a helper another port already has.
-- **Everything goes through a registry.** The loader must know everything a mod does so it can organize loading and
-  mods work together with no manual setup. Recipes, machine recipes, fuels, loot, worldgen, structures, dimensions,
-  biomes, fluids, energy, effects, attributes, particles, achievements, stats, game rules, config, lang, entities and
-  spawns are registered, and machines look up their registered recipes instead of keeping private tables. Items, fluids and
-  energy move through capabilities and services, never by checking for the mod's own blocks. Inputs take tags so
-  other mods' content feeds in. A missing registry becomes a general SDK builder.
-- **The game stays vanilla.** Never change, add or remove vanilla game logic or content in `b1.7.3_rewrite` (`crates/game`,
-  `crates/server`, vanilla files in `crates/client`) unless the user says to. Do not refactor a vanilla function to reuse
-  part of it: call it as it is from the loader. The mod changes the game only through the loader API.
-- **The mod adapts to beta, never the other way.** Port the mod's content into the beta world as it is:
-  - Leave out systems beta does not have: dyeing, enchanting, potions brewing, creative-only blocks, written books,
-    death messages, map copying and the like. Use the closest beta behavior, or leave the feature out, and note it once
-    in PORT_STATUS.md.
-  - Content tied to later versions (the End, newer mobs, blocks or materials) is reorganized and rebalanced so it makes
-    sense in beta: move it to a beta place, swap materials for beta ones, retune drops and costs.
-  - Never import later version content into the game to make a mod fit.
-- **Loader changes are universal.** When the API cannot do something the mod needs, extend the loader with a general
-  feature any mod could use, named and documented without the mod. Never hardcode a mod's ids, names or rules in the
-  loader. A change to an existing loader function must keep every other mod working.
-- **Vanilla files change only to grow the loader API, never for one mod.** First reach the game through hooks that
-  already exist (`api.sh hooks`) and vanilla's own extension points: registries and lists vanilla keeps
-  (`RenderEngine.registerTextureFX`, entity and block classes, vtable classes set on objects the loader creates),
-  and vanilla functions called as they are. When none fits, a new hook site is allowed: one `// rewrite:` call into
-  the loader, generic and named for what it lets any mod do, behavior-neutral with zero mods, listed in
-  `crates/modloader/hooks.toml`. Never put a mod's ids, names, rules or content in vanilla code, and never refactor or
-  change vanilla logic itself.
-- **Done means verified.** Report what was checked (builds, console tests, server logs) and what was not (client
-  visuals, multiplayer, player-driven features). Never call a port finished while PORT_STATUS.md lists open rows.
+    vanilla names. Use the seeded `minecraft:` and `c:` tags or add a `c:` tag, and put the mod's own content in the
+    tags it belongs to, so other mods' content takes part.
+  - variants by state: named properties on the block builder, read and written with `StateData`. No meta bit masks.
+  - vanilla textures by sprite name: `minecraft:block/oak_leaves`, `minecraft:item/stick`, `minecraft:gui/icons`.
+- **Everything goes through a registry.** Recipes, machine jobs, fuels, loot, worldgen, structures, dimensions,
+  biomes, fluids, energy, effects, attributes, particles, achievements, stats, game rules, damage types, config,
+  lang, entities, spawns and accessory slots are registered. Machines look up registered jobs instead of private
+  tables. Items, fluids and energy move through capabilities, never by checking for the mod's own blocks.
+- **The game stays vanilla.** Never change vanilla logic or content in `b1.7.3_rewrite` (`crates/game`,
+  `crates/server`, vanilla files in `crates/client`). The mod reaches the game only through the loader API. Never
+  replace a vanilla screen: extra UI is an overlay behind a toggle on the vanilla screen.
+- **The mod adapts to beta.** Where beta lacks a system (enchanting, potions brewing, hunger, experience, creative
+  mode, written books, leads, later blocks and mobs) use the closest beta behavior or leave the feature out, and
+  note it once in `PORT_STATUS.md` under "Beta differences". Never import later-version content into the game.
+- **Source bugs.** Fix a plain bug (a flag never set, a counter that leaks, a loop that cannot end) and list it
+  under "Source bugs fixed". Keep quirks players rely on (an unkeyed recipe letter that leaves a slot empty).
+- **Loader changes are universal.** A new loader feature is general, named and documented without the mod, and keeps
+  every other mod working. Never hardcode a mod's names or rules in the loader.
 
-## Workspace
+## Workspace, modes, tools
 
-Paths are relative to the workspace root, the folder that holds `b1.7.3_rewrite/`, `ports/` and the kit repo
-`b1.7.3_modport/`. The kit's `install.sh` links its tools to `tools/modport/` (written `T/` below) and this skill to
-`.claude/skills/modport`; from a port folder `T/` is `../../tools/modport/`. Fix or extend tools in `b1.7.3_modport/`, never inside a port. On a new machine, or when a
-tool fails on a missing dependency, run `T/doctor.sh`: it prints the command that fixes each gap. All tools are
-bash: on Windows they run in Git Bash (the Bash tool of Claude Code on Windows) and handle `.exe`, `py` and paths
-themselves. Call Python tools through `T/py.sh`, never `python3` directly.
+Paths are relative to the workspace root, the folder holding `b1.7.3_rewrite/`, `ports/` and the kit
+`b1.7.3_modport/`. `T/` is `tools/modport/` (from a port folder `../../tools/modport/`). Fix or extend tools in
+`b1.7.3_modport/tools/`, never inside a port. When a tool fails on a missing dependency run `T/doctor.sh`. Call
+Python tools through `T/py.sh`.
 
-## Modes
+Check once per session: `test -f .modport-maintainer`. With the marker (maintainer mode) the loader, SDK and kit
+repos are the user's own; commit there when asked. Without it (user mode) loader and SDK changes stay in the working
+tree, are logged in `ports/<modid>/LOADER_CHANGES.md`, and are never committed, pushed or sent upstream by any `gh`
+write. Never create the marker.
 
-Check once per session: `test -f .modport-maintainer` in the workspace root.
-
-- **Maintainer mode** (the marker exists): the loader, SDK and kit repos are this user's own. Commit and push to them
-  only when the user asks, as the steps below say.
-- **User mode** (no marker, the default): the loader, SDK and kit repos belong to their upstream author.
-  - Loader and SDK extensions stay in the local working tree. Never commit them to those repos, never push to their
-    remotes, never run `gh pr create`, `gh issue create` or any other `gh` write against them, even when asked to
-    "share" or "upstream" a change. Tell the user to do that themselves.
-  - Log each loader or SDK change in `ports/<modid>/LOADER_CHANGES.md`: what it adds, why, which files.
-  - Tell the user that a port needing a local loader change runs only on their patched loader, not on a stock one.
-  - The port folder is the user's own repo: commit there when asked, push only to a remote the user set up.
-  - Never create the marker file.
-
-## Tools
-
-| Tool | Use it when | Output |
+| Tool | Use it for | Output |
 |---|---|---|
-| `T/new_port.sh <modid> <jar> [name]` | Starting a port. Writes manifests and `assets.toml`, git init, decompiles into `reference/src` (Vineflower, downloaded and verified on first use), runs the inventory | `ports/<modid>/` |
-| `T/inventory.sh <src>` | Listing what a mod registers: blocks, items and entities with classes, tiles, models, renderers, GUIs, worldgen, events | ~15 KB for a large mod, kept in `reference/inventory.txt` |
-| `T/api.sh` | Before writing code against the SDK. `sdk <file>` (world, register, screen, behavior, events, terrain, config, services), `spec <Struct>`, `enum <Name>` (HostCall, EntityField, ModelOp), `templates`, `events`, `console`, `hooks` | one line per signature with SDK line numbers |
-| `T/py.sh recipe.py <jar> <modid> [--sheet <png in jar> <names.txt> <to>]... [--url <page>]` | Regenerating `assets.toml` from the port folder (`new_port.sh` writes the first one). Pins the download by name and sha256, copies textures and sounds (lower case targets), maps lang keys to `tile.<modid>.x.name`, `item.<modid>.x.name`, `<modid>.<key>`. `--sheet` cuts an old-style 16x16 grid sheet: names.txt lines are `<slot> <name> [span]`, `<to>` is `textures/block` or `textures/item` | `assets.toml`, committed |
-| `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>... [--arg Model.scale=0.5]` | Models. ModelBase constructors (SRG or MCP names) to parts and boxes. Wrap the call in the port's `tools/convert_models.sh` | generated Rust, never hand edit |
-| `T/audit.sh ports/<modid>` | After each module and before calling a port done. Lists code that bypasses names, tags, states and registries: numeric id lookups and comparisons, meta bits, blocks placed by number, numeric items, vanilla sheet slot textures, lists of vanilla names, a private `ids.rs` | hits per rule with file:line, `clean` and exit 0 when none |
-| `T/test.sh deploy ports/<modid> [--game]` | Every test cycle. Builds, stops the test server, installs the mod alone, starts the server. `--game` first rebuilds the game and cargo-b173 (after loader or SDK changes). Refuses while a test server runs: another session may own it, ask before `--force` | server console tail |
-| `T/test.sh errors [n]` | First thing after any failure | panic, trap and error lines of both logs |
-| `T/modtest.sh cmd <console line>` / `log server 80` | Driving and checking the server | reply lines only |
-| `T/modtest.sh client` / `shot <png>` | Visual checks only. Ask the user before starting a client: it opens a window on their desktop | game-window PNG |
+| `T/new_port.sh <modid> <jar> [name] [more archives]` | Step 1. Manifests, `assets.toml`, decompile, inventory | `ports/<modid>/` |
+| `T/decompile.sh <port> <jar>...` | Re-running the decompile. Merges archives; remaps a ModLoader era mod from obfuscated beta names to MCP names when the workspace has the mappings (`doctor.sh` says) | `reference/src`, `reference/inventory.txt` |
+| `T/inventory.sh <src>` | What the source registers, all Forge, Fabric and ModLoader idioms | grouped lists |
+| `T/api.sh find <word>` | First stop for any API question: SDK signatures and protocol variants naming the word | lines with file:line |
+| `T/api.sh sdk <file>` / `spec <Struct>` / `enum <Name>` / `templates` / `events` / `console` / `hooks` | One SDK file's signatures (`world`, `register`, `screen`, `behavior`, `events`, `terrain`, `attachment`), a spec's fields, an enum's variants (`EntityField`, `ModelOp`, `WorldRequest` and the other request groups), template names, event names, dev console syntax, hook names | one line per item |
+| `T/coverage.sh registry <modid> [kind]` | What the loader registered for the port, from the last deploy's log | names per kind, or full rows of one kind |
+| `T/coverage.sh names <port>` / `recipes <port>` / `handlers <port>` / `all <port>` | Step 7 gates: source display names with no port row, recipe counts side by side, source gameplay methods and event handlers beside the port's behaviors and listeners | "source only" lists |
+| `T/audit.sh <port>` | Code that bypasses names, tags, states and registries | hits per rule, `clean` when none |
+| `T/py.sh recipe.py <jar> <modid> [--sheet <png> <names.txt> <to>]... [--url <page>]` | Regenerating `assets.toml`. `--sheet` cuts an old 16x16 grid sheet, names.txt lines are `<slot> <name> [span]` | `assets.toml` |
+| `T/py.sh convert_models.py --out src/models/generated.rs <Model.java>...` | ModelBase constructors to parts and boxes | generated Rust, never hand edited |
+| `T/test.sh deploy <port> [--game]` | Every test cycle: build, install alone, start the test server. `--game` after any loader or SDK change. Refuses while a server runs | console tail |
+| `T/test.sh errors [n]` | After every deploy: panics, traps, errors and loader warnings. A loader warning names content the loader dropped (an unknown item in loot, an empty recipe slot) | lines of both logs |
+| `T/modtest.sh cmd <console line>` / `log server 80` | Driving and reading the server | reply lines |
+| `T/modtest.sh client` / `shot <png>` | Visual checks. Ask first | PNG, read with the Read tool |
 
-Console (`T/modtest.sh cmd loader ...`, syntax from `T/api.sh console`): `gen`, `map` (top-down PNG), `slice` (vertical
-cut PNG), `column` (check before `tp`: a player teleported into terrain suffocates), `fill`, `tp`, `use`, `interact`,
-`close`, `entities`, `summon`, `slot`, `tile`, `texturepack export [folder]` (the vanilla files as a modern pack, for
-sprite names). Read PNGs with the Read tool. Put repeated check chains in small scripts
-in `ports/<modid>/tools/` instead of retyping them.
+Console (`T/modtest.sh cmd loader ...`, syntax from `T/api.sh console`): `gen`, `map`, `slice`, `column` (check
+before `tp`), `fill`, `tp`, `use`, `interact`, `close`, `entities`, `summon`, `slot`, `tile`, `container`,
+`spawns`, `structures`, `locate`, `features`,
+`texturepack export`. Put a repeated check chain in a script under `ports/<modid>/tools/`.
 
-## Workflow
+## The run
 
-1. **Set up.** Pick the source version closest to beta (1.7.10 over 1.12 over 1.21): its models, textures and data
-   shapes map most directly. 1.7.10 jars use SRG names (`func_`, `field_`): read meaning from use, do not hunt mappings.
-   Run `new_port.sh`. Third-party art never goes in the port's `assets/` or its `.bmod`: the `assets.toml` recipe
-   (format in `tools/rewrite/modloader-guide.md`, "Assets players supply") tells the client how to build it from the
-   player's own download in `mods/<modid>_assets/`, cached in `.cache/mods/assets/<modid>/`. The README names that
-   download. The recipe writes the modern resource pack layout only, one file per sprite under `textures/`, sounds
-   under `sounds/`, lang in `lang/en_US.lang`: the game loads each mod as a texture pack layer and player packs replace
-   any of it. An old-style jar's grid sheets become `[[slice]]` steps via `recipe.py --sheet`, never sheets or root
-   paths. Steps the generator cannot write (`[[compose]]` sprites from 3D renderers, extra downloads, renames) go in
-   the port's own `tools/recipe.py`, which runs `T/py.sh recipe.py` and appends them. Text the port writes itself
-   (names, messages, GUI labels) ships as the port's own `assets/<modid>/lang/en_US.lang`, the only file in its
-   `assets/`. Copy vanilla model classes a mod model extends into `reference/vanilla/` for the converter. For testing,
-   drop the download in the test game's `mods/<modid>_assets/` once.
-2. **Deconstruct and plan.** From `reference/inventory.txt` and the source, write down what the mod is, not how its
-   code is laid out: its content (blocks, items, entities, dimensions, structures), mechanics (what each thing does,
-   with its rules and numbers), data (recipes, machine recipes, fuels, loot, worldgen, spawns, config) and UI flow.
-   Each entry becomes a PORT_STATUS.md todo row naming the registry or system it goes through (Registry map below)
-   and the tags its content joins, in dependency order: blocks and items, recipes, worldgen and dimension, entities,
-   machines and GUIs, structures, bosses, player systems, extra slots, item behaviors, sounds and particles, config.
-   Rows with no loader fit are loader extensions to build (Extending the loader). Milestones end with a deploy and a
-   console check.
-3. **Rewrite feature by feature** from the rows, not from the Java files. Find the SDK system with `api.sh` and copy
-   the pattern from an exemplar. Open a source class only for a rule or number the row needs. Every Java `blockID ==`,
-   `instanceof` on a mod block, metadata mask, private recipe map or hardcoded block list becomes a name, tag, state
-   or registry entry, never copied. Run `T/audit.sh` when the feature builds.
-   Cite the source class in PORT_STATUS.md, not in code comments. Decide per feature how it fits beta (Porting rules)
-   before writing it.
-4. **Extend the loader** only when `api.sh` shows no way (checklist below).
-5. **Test** after each module with `deploy`, `cmd`, `errors`. Keep a bug list in PORT_STATUS.md instead of looping on
-   one issue; fix the list at the end.
-6. **Finish.** `T/audit.sh ports/<modid>` prints `clean`, or every remaining hit is listed in PORT_STATUS.md with
-   why it stays (an air check, a tag list, a vanilla API that only takes numbers). Update PORT_STATUS.md. Run `cargo +nightly fmt` in the port and `cargo clippy` in `b1.7.3_rewrite`.
-   Commit only when asked: a port holds Rust source, tools, manifests, `assets.toml` and its own lang file, never
-   third-party art, `reference/` or AI files.
-   `ports/` is either one git repo per port or a monorepo with one folder per mod; `new_port.sh` detects which.
-   In user mode, list the local loader changes the port needs from `LOADER_CHANGES.md` in the final report.
+1. **Set up.** Pick the source version closest to beta (a beta ModLoader build over 1.7.10 over 1.12). Run
+   `new_port.sh`; pass every archive of a mod shipped in parts. A 1.7.10 jar keeps SRG names (`func_`, `field_`):
+   read meaning from use. Third-party art never enters the port or its `.bmod`: `assets.toml` (format in
+   `tools/rewrite/modloader-guide.md`, "Assets players supply") builds the modern pack layout from the player's
+   own download in `mods/<modid>_assets/`. Steps the generator cannot write go in the port's `tools/recipe.py`.
+   Text the port writes itself is its own `assets/<modid>/lang/en_US.lang`. For testing, drop the download in the
+   test game's `mods/<modid>_assets/` once.
+2. **Build the ledger.** Fill `PORT_STATUS.md` before writing any code. Sources, in this order, one pass each:
+   - `reference/inventory.txt`: one row per block, item (each metadata or NBT variant is its own row), entity, tile
+     entity, GUI, dimension, biome, structure, world generator, particle, sound set.
+   - `T/coverage.sh handlers <port>` (the source half): one row per class and method listed, and one per event
+     handler and ModLoader hook. These rows are the mod's behavior; they are what gets forgotten.
+   - The mod's registry classes: every recipe call, smelting, fuel, machine recipe table, loot table, spawn entry,
+     achievement, with counts.
+   - The config class: every option with its default, each a row.
+   - The client overlay and HUD classes, key bindings, packets (each packet is a client to server or server to
+     client flow to rebuild on channels or synced state).
+   Each row names the loader system it goes through (Registry map), the tags its content joins and, where beta
+   lacks it, the beta decision. Rows with no loader fit are marked "loader" and built in step 4. Order the rows:
+   blocks and items, recipes and data, worldgen and dimension, entities, machines and GUIs, structures, bosses,
+   player systems and events, HUD, sounds and particles, config.
+3. **Build row by row.** For each row: `T/api.sh find`, copy the pattern from an exemplar, read the one source
+   method, write it, build. Every Java `blockID ==`, `instanceof`, metadata mask, private recipe map or hardcoded
+   list becomes a name, tag, state or registry entry. Cite the source class in `PORT_STATUS.md`, not in code. Deploy
+   and run a console check at the end of each ledger group, not each row.
+4. **Extend the loader** for rows marked "loader" (checklist below), then return to the ledger.
+5. **Test each group** with `deploy`, `errors`, `cmd`. A check must prove a result: place the block and read it
+   back, run the machine and read its output slot, summon the mob and read `entities`. Write down in the row what
+   was proven.
+6. **Fix the bug list.**
+7. **Gates.** All four must pass before the port is called done. Deploy first so the registry report is fresh.
+   - `T/test.sh errors`: no panic, trap, error or loader warning.
+   - `T/coverage.sh names <port>`: every "source only" name is ported or listed under "Beta differences".
+   - `T/coverage.sh recipes <port>`: registered counts explain the source counts. When the source registers
+     recipes in one list, compare the lists in order by pattern, result, count and damage, and map every source
+     ingredient to exactly one port item (a script over both tables, not a read-through).
+   - `T/coverage.sh handlers <port>`: every source class and method row has a port behavior or listener that does
+     what the method does, checked by opening both. Every config option of the source exists or is listed as left
+     out with the reason.
+   - `T/audit.sh <port>` prints `clean`, or each hit is listed in `PORT_STATUS.md` with why it stays.
+8. **Finish.** `cargo +nightly fmt` in the port, `cargo clippy` in `b1.7.3_rewrite` if the loader changed. Update
+   `PORT_STATUS.md`: done rows, "Beta differences", "Source bugs fixed", "Not checked" (client visuals,
+   multiplayer). Commit only when asked, one commit per feature or fix: a port holds Rust source, tools, manifests,
+   `assets.toml` and its own lang file, never third-party art, `reference/` or AI files. In user mode list the
+   loader changes from `LOADER_CHANGES.md` in the final report.
 
-## Exemplars
+Auditing an existing port is steps 7 and 8 alone: deploy, run the gates, add a ledger row for each gap, build the
+rows, run the gates again.
 
-SDK examples, always present: `b1.7.3_rewrite/vendor/b1.7.3-modding-sdk/examples/` with `testmod` (every API module in
-one file), `ruby` (data only content), `energy`, `energy_api`, `machines` (services between mods).
+## Source to loader
 
-A finished port, when the workspace has one, is the faster map. The Aether port (`ports/aether/src`):
-
-| Need | File |
-|---|---|
-| Block table, templates, behaviors | `blocks.rs` (one const row array per kind) |
-| Items, tools, armor, food, recipes | `items.rs`, `tools.rs`, `gear.rs`, `recipes.rs` |
-| Config options | `config.rs` (port every spawn rate roll, missing ones flood the world) |
-| Entity registration and helpers | `entities/mod.rs` |
-| Passive mob and mount, hostile, flyer, projectile | `entities/phyg.rs` + `mount.rs`, `cockatrice.rs`, `zephyr.rs`, `projectile.rs` |
-| Client-visible entity state | `entities/swet.rs`, `entities/moa.rs` (`setSynced`/`synced`) |
-| Models and animation | `models/mod.rs` (`part`, `cuboid`, `Program`; copy it into a new port) |
-| Boss, boss bar HUD, dialogue screen | `entities/bosses/mod.rs`, `valkyrie_queen.rs` (`transparent()` screen plus serverbound channel) |
-| Machine with GUI and tile data | `machines.rs` (`ScreenBuilder`, `#[tile_behavior]`) |
-| Extra equipment slots, render layers | `accessories.rs` (`screens().overlay("GuiInventory", ..)`, `playerLayer`) |
-| Local player movement | `player.rs` (client side in `TickPost`, server state in `thread_local` maps by entity id) |
-| Dimension, terrain, decoration | `world/mod.rs`, `world/terrain.rs`, `world/decorate.rs` |
-| Structures | `world/dungeons/mod.rs`, `writer.rs` (`terrain::structure::candidates`, clip to `StructureBox::populated`, compress 256-high heights into 128) |
-| Portal and travel | `portal.rs` |
-
-Shapes that always apply: renderer GL calls become `Program` ops (push, translate, rotate, scale, texture, blend,
-lighting) in the entity's `pose`; `onLivingUpdate`/`updateEntityActionState` go to `onAi` (replaces template AI) or
-`onTick`; worldgen uses `terrain::Random` and the noise ports (matching the source's exact terrain is not required); check `isAuthority()` before changing the world
-(single player loops packets back, same code both sides); client side motion on mobs and other players does nothing in
-multiplayer since the server drives their positions, so port such code to the server; validate every serverbound payload; chat through
-`translate("<modid>.gui.…")`; sounds as `<modid>.<path.with.dots>`; textures as `<modid>:<path>`.
-
-Registry map. Each source concept goes to one loader system (`T/api.sh sdk register` lists the builders):
+Registries (`T/api.sh sdk register` lists the builders):
 
 | Source | Loader |
 |---|---|
-| `Block`/`Item` classes, `blockID`, `itemID` | `ctx.blocks()`/`ctx.items()` rows, identity by name (`world.is`, `blockIs`, `ItemRef::is`); world calls take a `BlockRef` name, `notifyAround` for neighbor updates; logs and leaves in `minecraft:logs`/`minecraft:leaves` decay through the loader, never by hand |
-| Metadata, `BlockState` | `ctx.blocks().states`, `StateData::of/with/get/flag`; models by state with `ctx.blocks().stateModel`, textures with `BlockBehavior::textureFor` |
-| `OreDictionary`, hardcoded block or item lists | tags: seeded `minecraft:` and `c:` tags, `ctx.tags()`, `.tag()` on the mod's own rows |
-| `CraftingManager`, `FurnaceRecipes`, `GameRegistry.addRecipe` | `ctx.recipes()`, tag ingredients (`keyTag` in shaped) |
-| Machine recipe maps (macerator, enchanter, assembly) | `ctx.machines()`, the machine reads its registered recipes when it runs |
-| Fuel handlers, burn time tables | `ctx.recipes().fuel`, read back with `fuelTicks` |
-| Loot in chests, dungeon rewards, mob drops | `ctx.loot()` tables and pools; drops that depend on mob state (sheared, saddled, type, clone) through `ctx.loot().condition/count` and `PoolBuilder::when/unless/countBy`, never rolled in `onDeath` |
-| `IWorldGenerator`, ore gen, trees, structures | named features: `ctx.worldgen().add(FeatureBuilder::ore/tree)` or `custom`, saplings through `world.placeFeature`, never a `ChunkPopulate` handler or a generator on a vanilla dimension; `ctx.structures()` |
-| Dimensions, biomes | `ctx.dimensions()`, biome tags (tag every mod biome), `World::biomeSpawns` instead of private creature tables |
-| Liquids, `LiquidStack`, buckets, cells | `ctx.fluids()`, containers through `ctx.fluids().container`, `containedFluid`/`fill`/`drainItem`; picky extraction through `world.extractMatching` |
-| Power (EU, MJ) | `ctx.energy()` |
-| `IInventory` access, pipes, cables, tanks | capabilities: `insertItem`, `extractItem`, `fillFluid`, `drainFluid`, `sendEnergy`; `ctx.services()` for mod APIs |
+| `Block`/`Item` classes | `ctx.blocks()`/`ctx.items()` rows from one const array per kind; a block's item behavior with `BlockSpecBuilder::itemBehavior` |
+| Metadata, `BlockState` | properties and variants on the block builder, `StateData::of/with/get/flag`, `stateModel`, `textureFor` |
+| `OreDictionary`, hardcoded lists | seeded `minecraft:` and `c:` tags, `ctx.tags()`, `.tag()` on the mod's rows |
+| `CraftingManager`, `addRecipe`, `addSmelting` | `ctx.recipes()`, `keyTag` and `shapelessTagged` for tag or any-damage ingredients |
+| Machine recipe maps | `ctx.machines().job`, the machine runs `matchJob`; `inputAny` for "anything but" inputs |
+| Fuel handlers | `ctx.recipes().fuel`, `ctx.machines().fuel`, read with `fuelTicks`/`machineFuel` |
+| Chest loot, mob drops | `ctx.loot()` pools, state dependent drops through loot conditions, never rolled in `onDeath` |
+| `IWorldGenerator`, ores, trees | named features: `ctx.worldgen().add` or `custom`; a mod dimension's decoration steps are named features placed in the source's order on the chunk random |
+| Dimensions, biomes, structures | `ctx.dimensions()`, biome tags, `ctx.structures()` with a finder |
+| Liquids, buckets, cells | `ctx.fluids()` and containers |
+| Power | `ctx.energy()`, tile `energy`/`tank` buffers the loader keeps and syncs |
+| `IInventory`, pipes, tanks | capabilities: `insertItem`, `extractItem`, `fillFluid`, `drainFluid`, `sendEnergy`; `ctx.services()` for mod APIs |
+| Extra equipment slots | `ctx.accessories()` slots taking a `c:accessories/<kind>` tag, an overlay on `GuiInventory` |
 | Potions, attributes, particles, achievements, stats, game rules, config, lang | `ctx.effects()`, `attributes()`, `particles()`, `achievements()`, `stats()`, `gameRules()`, `config()`, `lang()` |
-| `EntityList`, spawn lists | `ctx.entities()`, spawn rules, `modifySpawns` |
+| `EntityList`, spawn lists | `ctx.entities()` with `SpawnSpec`, `modifySpawns` |
 
-Data shapes (loader API 1.1, ABI 3). Identity is always by name, never by numeric id:
-- **Block variants and facing.** Source metadata or block states become named states: `ctx.blocks().states(name, BlockStatesSpec)` or `data/<modid>/states/<block>.toml`.
-  - List each property's values in the source's metadata order, so `ctx.meta()` code keeps working.
-  - A block with more than 16 states gets extra hidden ids from the loader. Read and write such a block only through `world.blockState`/`setBlockState` or `ctx.state()`/`setState()`.
-  - Textures per state go in `variants`.
-- **Per-stack data.** Item NBT and capabilities become data components: `stackComponent`/`setStackComponent` with a `StackRef`.
-  - A mod writes only `<modid>:*` components.
-  - Stacks with different components never merge.
-  - Damage stays durability. Use one item per variant instead of damage subtypes.
-- **Data on things the mod does not own.** Entity, player, tile, chunk and world NBT or capabilities become per-mod slots:
-  - entity: `entity.setData` or `setSynced`
-  - player: `player.setData(key, ..)`
-  - tile entity: `world.setTileAttachment`
-  - chunk: `world.setChunkAttachment`
-  - world: `setWorldData`
+Behavior hooks:
 
-  Every slot is keyed by the mod id, so two mods never clash.
-- **Edits to vanilla or other mods' content.** Property edits (hardness, light, flammability, tool) become `ctx.blocks().modify(BlockModifySpec)` or `data/<modid>/modify/blocks/*.toml`. Spawn list edits become `modifySpawns` or `modify/spawns/*.toml`. Mining speed for a tool class comes from the `minecraft:mineable/<pickaxe|axe|shovel>` tags. Conflicting edits are reported in the Mod Loader screen. Never replace a whole vanilla block for a property change.
-- **Worldgen and commands.**
-  - Name each worldgen feature uniquely. The name seeds its random, so other mods never shift it.
-  - Commands answer to `/<modid>:<name>`. The short `/<name>` goes to the first mod that registers it.
+| Source | Loader |
+|---|---|
+| `onItemUse`, `onItemRightClick`, `hitEntity`, `onBlockDestroyed`, use duration and release | `ItemBehavior`: `onUseOnBlock`, `onRightClick`, `onHitEntity`, `onBlockDestroyed`, `useDuration`/`onUsingTick`/`onStoppedUsing`/`onUseFinish`, `name` for per-stack names |
+| Item used on a mob | the mod entity's `EntityBehavior::onInteract(entity, player)`; for vanilla mobs `ItemBehavior::onInteractEntity`, which names no player (find the nearest player holding the item) |
+| Block methods | `BlockBehavior` (`T/api.sh sdk behavior`) |
+| Entity AI, update, interact, hurt, death | `EntityBehavior`: `onAi` (replaces template AI), `onTick`, `onInteract`, `onHurt`, `onDeath`, `canSpawn`, `pose` |
+| `PlayerInteractEvent` right click on a block | `ItemUseOnBlock` (any held item, blocks included, cancel stops the use) and `BlockActivate` (the block clicked) |
+| `FillBucketEvent` | `ItemUseOnBlock` with the bucket stack, the target is the block next to the clicked face |
+| `LivingAttackEvent`, `LivingHurtEvent`, `LivingFallEvent` | `LivingAttack` (cancel) and `LivingHurt` (amount is mutable); the hit's type from `damageType()`, a fall is `minecraft:fall` |
+| `LivingDeathEvent`, `LivingDropsEvent` | `LivingDeath`, `LivingDrops` (`addDrop`; the event runs before the loot falls and does not list it) |
+| `EntityStruckByLightningEvent` | `LightningStrike` (cancel spares the entity) |
+| `BreakEvent`, `HarvestDropsEvent`, `BreakSpeed` | `BlockBreak`, `BlockHarvestDrops` (drops are mutable), `PlayerBreakSpeed` |
+| `ItemCraftedEvent`, pickup, toss | `ItemCrafted`, `ItemPickup`, `ItemToss` |
+| Login, respawn, dimension change, sleep | `PlayerLogin`, `PlayerRespawn`, `PlayerChangeDimension`, `PlayerSleep` |
+| `LivingUpdateEvent`, player tick, `OnTickInGame` | `TickPost` over `allPlayers()`, client-only work behind `isClient()` and `localPlayer()` |
+| `RenderGameOverlayEvent`, HUD classes | `ctx.screens().hud(draw)` with `Draw` (`texture` for 256 sheets, `region`, `tinted`, `centered`) |
+| GUIs and containers | `ctx.screens().register` with `ScreenBuilder`, buttons as serverbound channel messages validated on the server |
+| Packets | `ctx.channels()` for events and button presses; state the client must see is synced data, not a packet |
+| Key bindings | `ctx.keybinds()` |
+
+State:
+
+| Source | Loader |
+|---|---|
+| Fields of a mod entity, extended entity properties | `EntityState<T>` statics (`.saved()` for NBT fields, `.kept()` to survive death), `entity.setSynced` for what clients draw |
+| Player NBT of the mod | `player.setData(key, ..)`; client-visible parts in synced data |
+| Tile entity fields | tile data with `Tile::new(..).synced()` |
+| Data on blocks, chunks, the world that other code reads | `Attachment<T>` statics (`saved()`, `synced()`), declared with `ctx.attachments().declare`, clients hear changes through `watch` |
+| Item NBT | data components (`stackComponent`/`setStackComponent`); one item per variant instead of damage subtypes |
+| World saved data | `setWorldData`, shared across saves `setSharedData` |
+
+Shapes that always apply: renderer GL calls become `Program` ops in the entity's `pose`; check `isAuthority()`
+before changing the world (single player runs client and server code in one place, so the same handler sees both);
+client-side motion on mobs and other players does nothing in multiplayer, port it to the server; validate every
+serverbound payload; chat through `translate("<modid>.gui...")`; sounds as `<modid>.<path.with.dots>`; textures as
+`<modid>:<path>`; config values are readable during registration once `config().options` ran.
+
+## Exemplars
+
+SDK examples, always present: `b1.7.3_rewrite/vendor/b1.7.3-modding-sdk/examples/` with `testmod` (every API module
+in one file), `ruby` (data only), `energy`, `energy_api`, `machines` (services between mods).
+
+A finished port, when the workspace has one, is the faster map (`ports/aether/src` unless noted):
+
+| Need | File |
+|---|---|
+| Block and item tables, tools, armor, food | `blocks.rs`, `items.rs`, `tools.rs` |
+| Item behaviors: use on block, eat, throw, cooldown, hit effects | `items.rs`, `weapons.rs`, `gear.rs` |
+| Event handlers for world rules and player protections | `portal.rs` (`bucketUsed`), `abilities.rs` |
+| HUD overlays | `hud.rs`, `portal_overlay.rs` |
+| Config options | `config.rs` (port every spawn rate roll, missing ones flood the world) |
+| Entities: passive mount, hostile, flyer, projectile, synced state | `entities/phyg.rs` + `mount.rs`, `cockatrice.rs`, `zephyr.rs`, `projectile.rs`, `moa.rs` |
+| Models and animation | `models/mod.rs` |
+| Boss, boss bar, dialogue screen | `entities/bosses/mod.rs`, `valkyrie_queen.rs` |
+| Machine with GUI, jobs and tile data | `machines.rs` |
+| Extra equipment slots, render layers | `accessories.rs` |
+| Dimension, terrain, ordered decoration features | `world/mod.rs`, `world/terrain.rs`, `world/decorate.rs` |
+| Structures | `world/dungeons/mod.rs`, `writer.rs` |
+| Recipes as one ordered table | `ports/ic2/src/recipes.rs` |
+| Energy net, cables, machines taking tags | `ports/ic2/src/energy/`, `ports/ic2/src/machines/processing.rs` |
+| Pipes, capabilities, synced attachments with `watch` | `ports/buildcraft/src/transport/`, `ports/buildcraft/src/energy/engine.rs` |
+| Tile data driving textures, channels for GUI buttons, a service other mods call | `ports/wirelessredstone/src/` |
 
 ## Extending the loader
 
-General features only, never a one-mod hack. Paths below are inside `b1.7.3_rewrite/`. Touch points, in order:
+General features only. Paths are inside `b1.7.3_rewrite/`. A new host call:
 
-1. Protocol: append variants at the end of `HostCall`, `GuestCall`, `GuestReply` or `EntityField` in
-   `vendor/b1.7.3-modding-sdk/mod_protocol/src/abi.rs`; new spec fields in `spec.rs` as `Option` or `Default` types
-   (spec structs are `#[serde(default)]`, so old mods still load). Released contracts never change: a changed one
-   gets a new version.
-2. Host: match arm in `crates/modloader/src/host/world.rs` (runtime calls) or `host/register.rs` (register phase);
-   larger systems in their own `crates/modloader/src/<system>.rs` or `extensions.rs`. New templates are rows in
-   `crates/modloader/src/entities.rs` (`ENTITY_TEMPLATES`) or `content/templates.rs` (`BLOCK_TEMPLATES`).
-3. SDK wrapper next to its siblings in `b173_api/src/{world,register,screen}.rs`, in the prelude if mods use it
-   everywhere.
-4. Client side in `crates/client/src/modded/`, reached from an existing hook or a vanilla extension point. Only
-   when neither fits, a new generic hook line with a `// rewrite:` comment, listed with a version in
-   `crates/modloader/hooks.toml` (see Porting rules).
-5. Dev console tools in `crates/modloader/src/devtools.rs` (add to `USAGE`).
-6. `cargo build` and `cargo clippy`, then `T/test.sh deploy ports/<modid> --game`. Note the addition where the
-   workspace keeps loader notes. Maintainer mode: SDK changes are committed in the SDK submodule, then bumped in the
-   rewrite, only when the user asks. User mode: nothing is committed there, the change goes in `LOADER_CHANGES.md`.
+1. Protocol: append the variant at the end of its group enum in
+   `vendor/b1.7.3-modding-sdk/mod_protocol/src/abi/calls/<group>.rs` (`T/api.sh enum HostCall` lists the groups) and
+   give it a row in the side table `mod_protocol/src/rules.rs`. Shared types live in `abi/shared.rs`, `abi/types.rs`
+   and `spec.rs`. Spec structs travel as named data: a new field with a default is safe. Never reorder or remove
+   enum variants.
+2. Host: the match arm in `crates/modloader/src/host/world.rs` (runtime) or `host/register.rs` (register phase);
+   larger systems in their own file. Templates are rows in `crates/modloader/src/entities.rs` or
+   `content/templates.rs`.
+3. SDK wrapper beside its siblings under `b173_api/src/`, exported in the prelude when mods use it everywhere.
 
-Example chain, `World::lightning`: `HostCall::Lightning` (abi.rs) to its arm in `host/world.rs` to the wrapper in
-`b173_api/src/world.rs`.
+A new event, when the game does something no event covers:
 
-## Known traps
+1. `EventKind` variant at the end, plus its `EVENT_NAMES` row and count, in `mod_protocol/src/abi/events.rs`; the
+   marker in `event_types!` in `b173_api/src/events.rs`.
+2. `GameEvent` variant in `crates/game/src/hooks/mod.rs`, fired by one line at the vanilla site
+   (`crate::hooks::fire(..)` returns true when a mod canceled); behavior-neutral with zero mods.
+3. Kind mapping and payload in `crates/modloader/src/gameevents.rs`; a row in `crates/modloader/hooks.toml`.
 
-- A numeric id from `world.block(pos)`, a callback or a stack is a runtime handle. It changes on every remap, and mod
-  ids sit above beta's 256, so any table sized for beta ids overflows. Compare through `blockIs`/`blockTagged`, never
-  against a looked-up number.
-- A block with more than 16 states has hidden page ids. `nameOf` and `world.is` answer with the block's own name for
-  every page; a raw number compare misses all but the first page.
-- A vanilla texture string that names no sprite fails registration. Use `minecraft:block/<sprite>` (names from
-  `loader texturepack export`).
-- A tag the port reads but nothing fills is empty, not an error. Tag the mod's own content and check
-  `tagMembers` in a console test.
+Example chain, `lightning_strike`: `EventKind::LightningStrike`, `GameEvent::LightningStrike` fired in
+`entity_lightning_bolt.rs` before `onStruckByLightning`, posted as `EventData::Entity` in `gameevents.rs`.
 
-- `HostCall`, `HostReply` and spec structs are postcard encoded. Never add a field to an existing struct: ABI 2 guests would stop decoding. New data needs a new variant or a new struct.
+Then `cargo check --workspace` in `b1.7.3_rewrite`, `T/test.sh deploy <port> --game`, and note the addition where
+the workspace keeps loader notes (maintainer mode) or in `LOADER_CHANGES.md` (user mode).
 
-- `T/modtest.sh` drives one shared test server and client (`b1.7.3_rewrite/target/modtest`, server in its `server/`). Never stop, reset or take
-  over one another session started without asking the user.
-- `cargo b173 build` already runs the wasm build; there is no separate `cargo build` step.
-- Loader or SDK change without `deploy --game`: the server still runs the old binary without the new host calls.
-- The test client's window loses focus and opens the pause menu; it is the harness, not the port.
+## Known limits and traps
+
+- A mod cannot read the wall clock or files. Date-driven features become config options; say so in
+  `PORT_STATUS.md`.
+- One guest call has a time budget. Never scan thousands of blocks in one call; spread the work over ticks.
+- A server never learns a player's own motion. Derive speed from the position change between ticks.
+- A numeric id from `world.block(pos)`, a callback or a stack changes on every remap, and mod ids sit above beta's
+  256. Compare through `blockIs`/`blockTagged`. A block with more than 16 states has hidden page ids that only
+  `world.is` and `nameOf` resolve.
+- A vanilla texture string that names no sprite fails registration (names from `loader texturepack export`).
+- A tag the port reads but nothing fills is empty, not an error. An item name in loot or a recipe that is not
+  registered is dropped with a loader warning, not an error: `T/test.sh errors` shows it.
+- A lang row beats a spec `name`. A name that depends on config or on the stack is an `ItemBehavior::name`.
+- `LivingDrops` cannot see what falls. To change a mob's own loot use loot pools and conditions; to act on the fallen
+  items, handle them at the end of the tick.
+- Player data set on an entity does not survive death unless it is `player.setData` or a `.kept()` state. Worn
+  extra-slot items do not drop on death by themselves: the port drops them in `LivingDeath`.
+- `T/modtest.sh` drives one shared test server and client. `MODTEST_HOME` and `MODTEST_PORT` give a session its
+  own. Never stop, reset or take over one another session started.
+- `cargo b173 build` runs the wasm build. After a loader or SDK change, a deploy without `--game` runs the old
+  binary.
+- The registry report `coverage.sh` reads comes from the last deploy. Deploy before running the gates.
