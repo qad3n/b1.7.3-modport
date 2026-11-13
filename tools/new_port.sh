@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # creates ports/<modid> from a mod jar: manifests, assets.toml recipe, git repo, Vineflower decompile, content inventory
-#   new_port.sh <modid> <mod.jar> [display name]
+#   new_port.sh <modid> <mod.jar> [display name] [more archives of the same mod...]
+# the first archive is the one the assets.toml recipe pins, decompile.sh merges and remaps them all
 set -euo pipefail
 
 modid="${1:?modid}"
@@ -8,8 +9,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 jar="$(absPath "${2:?mod jar}")"
 name="${3:-$modid}"
 port="$ports/$modid"
-vineflower="$(vineflowerJar)"
-java="${JAVA:-java}"
 
 [[ -e "$port" ]] && fail "$port exists"
 # ports inside a git work tree means a monorepo that already ignores build output
@@ -116,13 +115,21 @@ Source: $(basename "$jar") (\`reference/src\`, Vineflower decompile, never commi
 Target: b1.7.3_rewrite mod loader, one \`$modid-<version>.bmod\` for client and server.
 Assets: \`assets.toml\` builds the art from \`mods/${modid}_assets/$(basename "$jar")\`, never committed or packed.
 
-## Inventory
+## Ledger
 
-## Done
+One row per block, item, entity, behavior (source class and method), event handler, recipe set, config option and
+HUD element: what it is, the loader system it goes through, state (todo, built, proven how).
 
-## Bugs to check at the end
+| Row | Source | Loader system | State |
+|---|---|---|---|
 
-## Todo, in order
+## Beta differences
+
+## Source bugs fixed
+
+## Bugs
+
+## Not checked
 EOF
 
 echo "== assets.toml"
@@ -130,16 +137,4 @@ runPython "$kitTools/recipe.py" "$jar" "$modid"
 
 $monorepo || git init -q
 
-echo "== decompiling"
-"$java" -jar "$vineflower" --indent-string="    " --log-level=warn "$jar" reference/src > reference/vineflower.log 2>&1 \
-    || { echo "vineflower failed, see reference/vineflower.log" >&2; exit 1; }
-# vineflower writes a jar when given a jar, unpack it so grep and the converters see sources
-for out in reference/src/*.jar; do
-    [[ -f "$out" ]] || continue
-    unzipTo "$out" reference/src && rm "$out"
-done
-
-echo "== inventory"
-"$kitTools/inventory.sh" reference/src > reference/inventory.txt
-grep "^==" reference/inventory.txt
-echo "full list: $port/reference/inventory.txt"
+"$kitTools/decompile.sh" "$port" "$jar" "${@:4}"

@@ -43,4 +43,10 @@ else
     echo "info     Vineflower $VINEFLOWER_VERSION downloads from Maven Central on the first new_port.sh"
 fi
 
+if [[ -f "${B173_MAPPINGS:-$root/b1.7.3_decomp/mappings/b1.7.3-client.tiny}" && -f "${B173_CLIENT_JAR:-$root/b1.7.3_files/minecraft-b1.7.3-client.jar}" ]]; then
+    echo "ok       beta mappings and client jar, ModLoader era mods decompile with MCP names"
+else
+    echo "info     no beta mappings or client jar: ModLoader era mods decompile obfuscated (B173_MAPPINGS, TINY_REMAPPER, B173_CLIENT_JAR)"
+fi
+
 (( missing == 0 )) && echo "ready" || { echo "$missing missing"; exit 1; }
